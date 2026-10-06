@@ -20,6 +20,7 @@ const SAMPLE_QUACKS: Quack[] = [
   {
     id: "sample-1",
     text: "me: throws one crumb into the pond\nducks: assemble like the Avengers\ni fear i may have started something",
+    mood: "silly",
     userId: "sample-user-1",
     createdAt: new Date("2026-09-22T09:12:00"),
     user: { id: "sample-user-1", name: "Caffeinated Duck", username: "CaffeinatedDuck" },
@@ -27,6 +28,7 @@ const SAMPLE_QUACKS: Quack[] = [
   {
     id: "sample-2",
     text: "If ducks wore pants, would they wear them on their legs or over their whole lower half like a cape?\nAsking for a friend. A feathery friend.",
+    mood: null,
     userId: "sample-user-2",
     createdAt: new Date("2026-09-22T08:40:00"),
     user: { id: "sample-user-2", name: "Deep Duck Thoughts", username: "DeepDuckThoughts" },

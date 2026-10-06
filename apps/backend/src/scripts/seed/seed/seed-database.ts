@@ -1,5 +1,6 @@
 import { PrismaService } from '@/core/prisma/prisma.service';
 import { User } from '@/generated/prisma/client';
+import { QuackMood } from '@/modules/quack/domain/quack';
 import { BetterAuth } from '@/shared/auth/providers/better-auth.provider';
 import { Config } from '@/shared/config/config.service';
 import { createQuack } from './create-quack';
@@ -86,7 +87,13 @@ export const seedDatabase = async (
 
   // Listed oldest first. The feed sorts newest first, so the last entry here is
   // the one at the top of the screen.
-  const exampleQuacks: { author: User; minutesAgo: number; text: string }[] = [
+  // Some quacks carry a mood and some do not, so the feed shows both cases.
+  const exampleQuacks: {
+    author: User;
+    minutesAgo: number;
+    text: string;
+    mood?: QuackMood;
+  }[] = [
     {
       author: pondAdmin,
       minutesAgo: 2870,
@@ -108,6 +115,7 @@ Crust: excellent. Delivery: amateur. 6/10.`,
     {
       author: caffeinatedDuck,
       minutesAgo: 1980,
+      mood: 'silly',
       text: `just spilled coffee on my keyboard
 now every time i type "duck" it autocorrects to "quack"
 send help or more caffeine`,
@@ -120,6 +128,7 @@ send help or more caffeine`,
     {
       author: migrationSeason,
       minutesAgo: 1240,
+      mood: 'angry',
       text: `Update on the shortcut: it added 90 km and one entire mountain.
 We are not currently speaking to the front of the V.`,
     },
@@ -132,18 +141,21 @@ We have footage. It is extremely blurry footage. But we have it.`,
     {
       author: caffeinatedDuck,
       minutesAgo: 640,
+      mood: 'silly',
       text: `third espresso and i can hear colours now
 one of them is quacking`,
     },
     {
       author: breadCritic,
       minutesAgo: 415,
+      mood: 'happy',
       text: `Multigrain. Seeds still attached. Genuinely nutritious.
 The pond is not ready for this level of quality and, frankly, neither am I. 9/10.`,
     },
     {
       author: deepDuckThoughts,
       minutesAgo: 260,
+      mood: 'sad',
       text: `Everyone says "water off a duck's back" like it's a compliment.
 Some of us would quite like to feel things.`,
     },
@@ -157,6 +169,7 @@ i fear i may have started something`,
     {
       author: pondAdmin,
       minutesAgo: 20,
+      mood: 'angry',
       text: `The bread situation has been resolved. The swan has been spoken to.
 Please stop tagging me.`,
     },
@@ -164,9 +177,10 @@ Please stop tagging me.`,
 
   const now = Date.now();
 
-  for (const { author, minutesAgo, text } of exampleQuacks) {
+  for (const { author, minutesAgo, text, mood } of exampleQuacks) {
     await createQuack(prisma, {
       text,
+      mood,
       userId: author.id,
       createdAt: new Date(now - minutesAgo * MINUTE_IN_MS),
     });

@@ -9,6 +9,7 @@ import { QuacksService } from './quacks.service';
 const aQuack = (overrides: Partial<Quack> = {}): Quack => ({
   id: 'q1',
   text: 'quack quack',
+  mood: null,
   userId: 'u1',
   createdAt: new Date('2026-01-01T12:00:00Z'),
   updatedAt: new Date('2026-01-01T12:00:00Z'),
@@ -39,9 +40,29 @@ describe('QuacksService', () => {
     await expect(service.createQuack(user, { text: 'hello' })).resolves.toEqual(
       created,
     );
-    // the author comes from the session, not from the caller's payload
+    // the author comes from the session, not from the caller's payload;
+    // a missing mood is stored as null
     expect(repository.createQuack).toHaveBeenCalledWith({
       text: 'hello',
+      mood: null,
+      userId: 'u1',
+    });
+  });
+
+  it('stores the chosen mood with the quack', async () => {
+    const created = aQuack({ id: 'q3', text: 'ha!', mood: 'silly' });
+    const repository = mock<QuackRepository>();
+    repository.createQuack.mockResolvedValue(created);
+
+    const service = new QuacksService(repository);
+    const user = { id: 'u1' } as Identity;
+
+    await expect(
+      service.createQuack(user, { text: 'ha!', mood: 'silly' }),
+    ).resolves.toEqual(created);
+    expect(repository.createQuack).toHaveBeenCalledWith({
+      text: 'ha!',
+      mood: 'silly',
       userId: 'u1',
     });
   });

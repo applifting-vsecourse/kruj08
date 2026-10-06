@@ -31,3 +31,11 @@ The CLI puts `shadow-xs`/`shadow-sm` on inputs, textareas and cards. [`DESIGN.md
 Assume the dev servers are up. If something is listening on the app's ports, that is this application: use it. Don't start a second instance, don't restart it, don't run `pnpm dev`.
 
 Don't reach for the browser to check your own work. Tests and type-checks are the evidence; open the running app when asked to, not on your own initiative.
+
+### Fix what the shadcn CLI generates
+
+Review every file `pnpm dlx shadcn@latest add` writes before committing. Besides the shadows above, the CLI has been seen to import `cn` from a third-party npm package (`import { cn } from "cn"`) and add that package to `package.json` — change the import to `@/lib/utils` and drop the dependency. One `cn` helper in the codebase, not two.
+
+### Regenerate the Prisma client after a schema change
+
+`pnpm backend prisma:migrations:run` writes and applies the migration but does not refresh the generated client in `apps/backend/src/generated/`. Run `pnpm backend prisma:generate` right after, or the next `pnpm backend test` fails with "Property X does not exist" against the stale types — a confusing error for a migration that just succeeded.
