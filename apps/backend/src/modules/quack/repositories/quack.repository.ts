@@ -1,5 +1,6 @@
 import { PrismaService } from '@/core/prisma/prisma.service';
 import {
+  Prisma,
   Quack as PrismaQuack,
   User as PrismaUser,
 } from '@/generated/prisma/client';
@@ -24,6 +25,28 @@ const mapPrismaQuackToDomain = (
     : undefined,
 });
 
+export type QuackListFilter = {
+  // Already trimmed and non-empty when present — the service normalises it.
+  search?: string;
+};
+
+// Plain substring match on the text and on the author's name and username,
+// case-insensitive (ILIKE). This is deliberately not full-text search: no
+// stemming, no ranking. It composes with `take`/`cursor` once the feed pages.
+const buildWhere = (
+  filter: QuackListFilter,
+): Prisma.QuackWhereInput | undefined => {
+  if (!filter.search) return undefined;
+  const contains = { contains: filter.search, mode: 'insensitive' as const };
+  return {
+    OR: [
+      { text: contains },
+      { user: { name: contains } },
+      { user: { username: contains } },
+    ],
+  };
+};
+
 /**
  * If you decide to choose a different ORM or database, you should only need to change the repository files methods implementation.
  * Inject what you need instead of PrismaService and re-implement the methods and model mapping.
@@ -32,8 +55,9 @@ const mapPrismaQuackToDomain = (
 export class QuackRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getQuacks(): Promise<Quack[]> {
+  async getQuacks(filter: QuackListFilter = {}): Promise<Quack[]> {
     const quacks = await this.prisma.quack.findMany({
+      where: buildWhere(filter),
       include: { user: true },
       orderBy: { createdAt: 'desc' },
     });

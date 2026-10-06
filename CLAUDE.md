@@ -20,6 +20,10 @@ The worked example is the quack feed: `Quack` model → seed → repository → 
 
 Deliberately sparse — this file grows as the team learns what it expects from generated code. Add rules here when you find yourself repeating the same review feedback.
 
+### Commit messages are semantic
+
+Every commit subject follows `<type>(<optional-scope>): <short description in present tense>`, for example `feat(api): change client response format`. Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`. Scope is the part of the repo touched (`api`, `web`, `quack`, `auth`, …) and is left out when the change is cross-cutting. The description is lowercase, imperative, no trailing period. One concern per commit; the body explains why when the subject can't.
+
 ### UI controls come from the kit
 
 Need a control that isn't in `src/components/ui/`? Add it with `pnpm dlx shadcn@latest add <name>` — don't hand-roll one in a feature folder, even where a native input would do the job. One accessibility implementation to reason about beats a per-control judgement call.
@@ -28,9 +32,11 @@ The CLI puts `shadow-xs`/`shadow-sm` on inputs, textareas and cards. [`DESIGN.md
 
 ### The app is already running
 
-Assume the dev servers are up. If something is listening on the app's ports, that is this application: use it. Don't start a second instance, don't restart it, don't run `pnpm dev`.
+Assume the dev servers are up. If something is listening on the app's ports, that is this application: use it rather than starting a second instance. Restarting it (`pnpm dev`) is fine when the running code is stale.
 
-Don't reach for the browser to check your own work. Tests and type-checks are the evidence; open the running app when asked to, not on your own initiative.
+Tests and type-checks are the first line of evidence, not the last. **If a change touches the frontend, also verify it in the running app through the browser extension (Claude in Chrome) at `http://localhost:3050/`** — exercise the changed screen the way a user would, including the empty and error states, before calling the work done. Backend-only changes don't need the browser; the unit tests and a passing build are enough there.
+
+Before trusting what the browser shows, confirm the backend watcher actually picked up your edits: `curl -s http://localhost:4050/api/docs-json` must reflect the new endpoint or parameter, and the matching file under `apps/backend/dist-dev/` must be newer than your edit. The Nest watcher has been seen to miss files that an agent rewrote (the file gets a new inode and the per-file watch stays on the old one) while still reacting to files edited by hand. When that happens, the browser is exercising stale server code and a "it doesn't work" verdict is wrong — restart the dev servers rather than debugging the feature.
 
 ### Fix what the shadcn CLI generates
 

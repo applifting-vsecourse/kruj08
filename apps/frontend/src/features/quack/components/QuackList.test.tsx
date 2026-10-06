@@ -39,6 +39,24 @@ describe("QuackList", () => {
     }
   })
 
+  it("shows the generic empty state without a search", () => {
+    render(<QuackList quacks={[]} />)
+
+    expect(screen.getByText("No quacks yet. Post the first one.")).toBeInTheDocument()
+  })
+
+  it("names the search in the empty state when nothing matched", () => {
+    render(
+      <QuackList
+        quacks={[]}
+        search="goose"
+      />,
+    )
+
+    expect(screen.getByText(/No quacks match “goose”/)).toBeInTheDocument()
+    expect(screen.queryByText("No quacks yet. Post the first one.")).not.toBeInTheDocument()
+  })
+
   it("shows an error with a working reload button", async () => {
     const onReload = vi.fn()
     render(

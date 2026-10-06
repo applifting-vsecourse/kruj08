@@ -27,6 +27,28 @@ describe('QuacksService', () => {
 
     await expect(service.getQuacks()).resolves.toEqual(quacks);
     expect(repository.getQuacks).toHaveBeenCalledTimes(1);
+    // no search means the unfiltered feed
+    expect(repository.getQuacks).toHaveBeenCalledWith({});
+  });
+
+  it('passes a trimmed search through to the repository', async () => {
+    const repository = mock<QuackRepository>();
+    repository.getQuacks.mockResolvedValue([]);
+
+    const service = new QuacksService(repository);
+
+    await service.getQuacks({ search: '  duck ' });
+    expect(repository.getQuacks).toHaveBeenCalledWith({ search: 'duck' });
+  });
+
+  it('treats a blank search as no search', async () => {
+    const repository = mock<QuackRepository>();
+    repository.getQuacks.mockResolvedValue([]);
+
+    const service = new QuacksService(repository);
+
+    await service.getQuacks({ search: '   ' });
+    expect(repository.getQuacks).toHaveBeenCalledWith({});
   });
 
   it('creates a quack owned by the signed-in user', async () => {
