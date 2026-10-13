@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Loader2 } from "lucide-react"
 import { useForm, useWatch } from "react-hook-form"
@@ -72,10 +73,13 @@ const toInput = (values: FormValues): UpdateProfileInput => ({
 type SettingsFormProps = {
   // The saved profile the form starts from and that "Discard" returns to.
   profile: Profile
+  // Called whenever the form starts or stops holding unsaved edits, so the
+  // page can warn before the user navigates away from them.
+  onDirtyChange?: (isDirty: boolean) => void
   className?: string
 }
 
-export function SettingsForm({ profile, className }: SettingsFormProps) {
+export function SettingsForm({ profile, onDirtyChange, className }: SettingsFormProps) {
   const updateProfile = useUpdateProfile()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -85,6 +89,10 @@ export function SettingsForm({ profile, className }: SettingsFormProps) {
   const bio = useWatch({ control: form.control, name: "bio" })
   const bioLength = bio?.length ?? 0
   const { isDirty } = form.formState
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
   const handleSubmit = (values: FormValues) => {
     updateProfile.mutate(toInput(values), {

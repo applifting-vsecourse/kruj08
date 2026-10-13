@@ -26,13 +26,16 @@ const aProfile = (overrides: Partial<Profile> = {}): Profile => ({
   ...overrides,
 })
 
-const renderForm = (profile = aProfile()) => {
+const renderForm = (profile = aProfile(), onDirtyChange?: (isDirty: boolean) => void) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <SettingsForm profile={profile} />
+      <SettingsForm
+        profile={profile}
+        onDirtyChange={onDirtyChange}
+      />
     </QueryClientProvider>,
   )
 }
@@ -45,6 +48,18 @@ const discardButton = () => screen.getByRole("button", { name: /discard/i })
 describe("SettingsForm", () => {
   beforeEach(() => {
     updateProfileMock.mockReset()
+  })
+
+  it("reports when it starts and stops holding unsaved edits", async () => {
+    const onDirtyChange = vi.fn()
+    renderForm(aProfile(), onDirtyChange)
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false)
+
+    await userEvent.type(nameField(), "!")
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true)
+
+    await userEvent.click(discardButton())
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false)
   })
 
   it("starts from the saved profile", () => {
