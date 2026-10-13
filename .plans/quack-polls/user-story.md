@@ -28,9 +28,15 @@
 
 **Scénář 4: Před hlasováním vidím jen možnosti**
 
-- **Pokud (Given):** jsem přihlášený a ve feedu je quack s anketou, ve které jsem ještě nehlasoval,
+- **Pokud (Given):** jsem přihlášený a ve feedu je cizí quack s anketou, ve které jsem ještě nehlasoval,
 - **Když (When):** na něj narazím,
 - **Pak (Then):** vidím klikatelné možnosti bez počtů hlasů a bez procent, i když ostatní už hlasovali.
+
+**Scénář 4b: Autor vidí výsledky své ankety vždy**
+
+- **Pokud (Given):** jsem přihlášený a ve feedu je moje vlastní anketa, ve které jsem nehlasoval,
+- **Když (When):** na ni narazím,
+- **Pak (Then):** vidím počty hlasů, procenta, pruhy i celkový počet hlasů, žádná možnost není zvýrazněná jako moje volba a dál mohu kliknutím hlasovat.
 
 **Scénář 5: Hlasování**
 
@@ -70,7 +76,7 @@
 ### Developer note _(volitelné, jediné místo pro technické informace)_
 
 - Nové Prisma modely navázané na `Quack`: anketa s možnostmi (pořadí, text) a hlas s unikátním klíčem `(userId, pollId)`; změna hlasu jako upsert, nikdy inkrement čítače. Po migraci nezapomenout na `pnpm backend prisma:generate`.
-- `POST /api/quacks` rozšířit o volitelné pole `poll.options` (DTO: 2–4 položky, 1–50 znaků, trim + unikátnost); nový endpoint pro hlas, např. `PUT /api/quacks/:id/vote`, vrací aktuální stav ankety (počty, procenta, `myOptionId`), aby klient čísla nikdy nepočítal sám.
+- `POST /api/quacks` rozšířit o volitelné pole `poll.options` (DTO: 2–4 položky, 1–50 znaků, trim + unikátnost); nový endpoint pro hlas, např. `PUT /api/quacks/:id/vote`, vrací aktuální stav ankety (počty, `myOptionId`, `canSeeResults`), aby klient čísla nikdy nepočítal sám ani nerozhodoval, komu je ukázat.
 - Endpoint pro hlas chránit stejným `AuthenticatedUserGuard` jako ostatní quack endpointy; nepřihlášený požadavek dostane 401, hlas se nezapíše.
 - `GET /api/quacks` musí vracet anketu včetně počtů a volby přihlášeného uživatele; počty agregovat na serveru. Souběh pokrýt unikátním indexem a ošetřením konfliktu.
 - Frontend: rozšířit zod schéma a formulář v `src/features/quack`, mutace přes TanStack Query bez optimistic update (`isPending` zablokuje možnosti, `onError` zobrazí inline hlášku, `onSuccess` zapíše odpověď do cache seznamu). Pruhy/procenta řešit prvky z kitu (`pnpm dlx shadcn@latest add progress`), odstranit stíny podle DESIGN.md.

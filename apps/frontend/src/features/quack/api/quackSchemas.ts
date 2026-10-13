@@ -23,6 +23,9 @@ export const pollSchema = z.object({
   totalVotes: z.number().int().nonnegative(),
   // The option the signed-in user voted for; null until they vote.
   myOptionId: z.string().nullable(),
+  // Decided by the server: true once the viewer has voted, and always for the
+  // quack's author.
+  canSeeResults: z.boolean(),
 })
 
 export const quackSchema = z.object({

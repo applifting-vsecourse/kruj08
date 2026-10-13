@@ -14,12 +14,12 @@ type QuackPollProps = {
   className?: string
 }
 
-// Two looks, one component: plain option buttons until the viewer has voted,
-// result bars with their own vote highlighted afterwards. Clicking an option
-// in either look casts or moves the vote.
+// Two looks, one component: plain option buttons while the counts are hidden,
+// result bars (with the viewer's own vote highlighted, if any) once the server
+// says they may see them. Clicking an option in either look casts or moves
+// the vote.
 export function QuackPoll({ quackId, poll, className }: QuackPollProps) {
   const vote = useVoteQuack()
-  const hasVoted = poll.myOptionId !== null
 
   const handleVote = (optionId: string) => {
     // Re-picking the current choice is a no-op, not a request.
@@ -38,7 +38,7 @@ export function QuackPoll({ quackId, poll, className }: QuackPollProps) {
       {poll.options.map((option) => {
         const isMine = option.id === poll.myOptionId
 
-        if (!hasVoted) {
+        if (!poll.canSeeResults) {
           return (
             <Button
               key={option.id}
@@ -88,7 +88,7 @@ export function QuackPoll({ quackId, poll, className }: QuackPollProps) {
         )
       })}
 
-      {hasVoted ? (
+      {poll.canSeeResults ? (
         <p className="text-sm text-muted-foreground">{formatVoteCount(poll.totalVotes)}</p>
       ) : null}
 

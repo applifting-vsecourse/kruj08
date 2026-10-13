@@ -31,6 +31,7 @@ const poll = (overrides: Partial<Poll> = {}): Poll => ({
   ],
   totalVotes: 3,
   myOptionId: null,
+  canSeeResults: false,
   ...overrides,
 })
 
@@ -87,7 +88,7 @@ describe("QuackPoll", () => {
     render(
       <QuackPoll
         quackId="q1"
-        poll={poll({ myOptionId: "o1" })}
+        poll={poll({ myOptionId: "o1", canSeeResults: true })}
       />,
     )
 
@@ -104,12 +105,28 @@ describe("QuackPoll", () => {
     )
   })
 
+  it("shows results without a highlighted choice when the server allows it before voting", () => {
+    // the author of the quack: counts visible, nothing voted for yet
+    render(
+      <QuackPoll
+        quackId="q1"
+        poll={poll({ canSeeResults: true })}
+      />,
+    )
+
+    expect(screen.getByText("3 votes")).toBeInTheDocument()
+    for (const button of screen.getAllByRole("button")) {
+      expect(button).toHaveAttribute("aria-pressed", "false")
+    }
+    expect(screen.queryByLabelText("Your vote")).not.toBeInTheDocument()
+  })
+
   it("moves the vote when a different option is clicked, and ignores the current one", async () => {
     const user = userEvent.setup()
     render(
       <QuackPoll
         quackId="q1"
-        poll={poll({ myOptionId: "o1" })}
+        poll={poll({ myOptionId: "o1", canSeeResults: true })}
       />,
     )
 

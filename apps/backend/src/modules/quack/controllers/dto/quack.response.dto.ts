@@ -43,11 +43,20 @@ export class PollDto {
   })
   myOptionId!: string | null;
 
-  static fromDomain(poll: Poll): PollDto {
+  @ApiProperty({
+    description:
+      'Whether the signed-in user may see the counts: true once they have voted, and always for the author of the quack.',
+  })
+  canSeeResults!: boolean;
+
+  static fromDomain(poll: Poll, viewer: { isAuthor: boolean }): PollDto {
     return {
       options: poll.options.map(({ id, text, votes }) => ({ id, text, votes })),
       totalVotes: poll.totalVotes,
       myOptionId: poll.myOptionId,
+      // The author asked the question, so they get the answers without having
+      // to pick one themselves. Everyone else votes first.
+      canSeeResults: viewer.isAuthor || poll.myOptionId !== null,
     };
   }
 }
@@ -82,7 +91,9 @@ export class QuackResponseDto {
   })
   poll!: PollDto | null;
 
-  static fromDomain(quack: Quack): QuackResponseDto {
+  // `viewerId` is the signed-in user: it decides whether the poll's counts are
+  // visible to them (see PollDto.fromDomain).
+  static fromDomain(quack: Quack, viewerId: string): QuackResponseDto {
     if (!quack.user) {
       throw new Error(
         `QuackResponseDto.fromDomain expected quack.user to be loaded for quack ${quack.id}`,
@@ -99,7 +110,11 @@ export class QuackResponseDto {
         name: quack.user.name,
         username: quack.user.username,
       },
-      poll: quack.poll ? PollDto.fromDomain(quack.poll) : null,
+      poll: quack.poll
+        ? PollDto.fromDomain(quack.poll, {
+            isAuthor: quack.userId === viewerId,
+          })
+        : null,
     };
   }
 }

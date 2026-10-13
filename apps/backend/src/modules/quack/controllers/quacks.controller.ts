@@ -63,7 +63,7 @@ export class QuacksController {
     const quacks = await this.quacksService.getQuacks(user, {
       search: query.search,
     });
-    return quacks.map(QuackResponseDto.fromDomain);
+    return quacks.map((quack) => QuackResponseDto.fromDomain(quack, user.id));
   }
 
   @Post()
@@ -82,7 +82,7 @@ export class QuacksController {
         mood: body.mood,
         pollOptions: body.poll?.options,
       });
-      return QuackResponseDto.fromDomain(quack);
+      return QuackResponseDto.fromDomain(quack, user.id);
     } catch (error) {
       if (error instanceof InvalidPollError) {
         throw new BadRequestException(error.message);
@@ -113,7 +113,7 @@ export class QuacksController {
   ): Promise<QuackResponseDto> {
     try {
       const quack = await this.quacksService.vote(user, id, body.optionId);
-      return QuackResponseDto.fromDomain(quack);
+      return QuackResponseDto.fromDomain(quack, user.id);
     } catch (error) {
       // Domain errors become HTTP here, at the boundary, so the service stays
       // free of status codes.
