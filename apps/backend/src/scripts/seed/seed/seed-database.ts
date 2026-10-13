@@ -29,7 +29,7 @@ export const seedDatabase = async (
   // Drop existing database data from all tables
   try {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "quack", "session", "account", "verification", "user" RESTART IDENTITY CASCADE;',
+      'TRUNCATE TABLE "poll_vote", "poll_option", "poll", "quack", "session", "account", "verification", "user" RESTART IDENTITY CASCADE;',
     );
   } catch (error) {
     console.error('Error truncating tables:', error);
@@ -88,11 +88,16 @@ export const seedDatabase = async (
   // Listed oldest first. The feed sorts newest first, so the last entry here is
   // the one at the top of the screen.
   // Some quacks carry a mood and some do not, so the feed shows both cases.
+  // One carries a poll, with votes cast below, so the feed shows result bars
+  // without anyone having to vote first.
   const exampleQuacks: {
     author: User;
     minutesAgo: number;
     text: string;
     mood?: QuackMood;
+    pollOptions?: string[];
+    // Usernames of seeded users voting, in option order (index = option).
+    votes?: User[][];
   }[] = [
     {
       author: pondAdmin,
@@ -161,6 +166,17 @@ Some of us would quite like to feel things.`,
     },
     {
       author: caffeinatedDuck,
+      minutesAgo: 150,
+      mood: 'happy',
+      text: `Lunch plans? I can't decide and I've had too much coffee to think.`,
+      pollOptions: ['Pond buffet', 'Bread stand', 'Skip lunch, more espresso'],
+      // Two for the buffet, one for the bread stand, nobody for more espresso.
+      // The author and the superadmin stay out, so a tester signing in as
+      // either one sees the "not voted yet" state.
+      votes: [[deepDuckThoughts, breadCritic], [migrationSeason], []],
+    },
+    {
+      author: caffeinatedDuck,
       minutesAgo: 95,
       text: `me: throws one crumb into the pond
 ducks: assemble like the Avengers
@@ -177,12 +193,35 @@ Please stop tagging me.`,
 
   const now = Date.now();
 
-  for (const { author, minutesAgo, text, mood } of exampleQuacks) {
-    await createQuack(prisma, {
+  for (const {
+    author,
+    minutesAgo,
+    text,
+    mood,
+    pollOptions,
+    votes,
+  } of exampleQuacks) {
+    const quack = await createQuack(prisma, {
       text,
       mood,
+      pollOptions,
       userId: author.id,
       createdAt: new Date(now - minutesAgo * MINUTE_IN_MS),
     });
+
+    if (quack.poll && votes) {
+      for (const [index, voters] of votes.entries()) {
+        const option = quack.poll.options[index];
+        for (const voter of voters) {
+          await prisma.pollVote.create({
+            data: {
+              pollId: quack.poll.id,
+              optionId: option.id,
+              userId: voter.id,
+            },
+          });
+        }
+      }
+    }
   }
 };

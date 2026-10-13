@@ -39,9 +39,58 @@ model Quack {
   userId    String
   createdAt DateTime   @default(now())
   updatedAt DateTime   @default(now()) @updatedAt
+  // A quack without a poll is a plain post — the common case.
+  poll      Poll?
 
   @@index([userId])
   @@map("quack")
+}
+
+// Satellite of a quack: the quack's text is the question, so the poll itself
+// only owns the options and the votes. Anything a poll might grow later
+// (closing time, multiple choice) belongs here, not on Quack.
+model Poll {
+  id        String       @id @default(cuid())
+  quack     Quack        @relation(fields: [quackId], references: [id], onDelete: Cascade)
+  quackId   String       @unique
+  createdAt DateTime     @default(now())
+  options   PollOption[]
+  votes     PollVote[]
+
+  @@map("poll")
+}
+
+model PollOption {
+  id       String     @id @default(cuid())
+  poll     Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  pollId   String
+  text     String     @db.VarChar(50)
+  // 0-based order in which the author entered the options.
+  position Int
+  votes    PollVote[]
+
+  // Target of the composite foreign key from PollVote, so a vote can only
+  // point at an option of its own poll.
+  @@unique([pollId, id])
+  @@unique([pollId, position])
+  @@map("poll_option")
+}
+
+model PollVote {
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  // Redundant with option.pollId on purpose: "one vote per poll" needs the
+  // poll in the primary key, and the composite FK below keeps it honest.
+  pollId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  option    PollOption @relation(fields: [pollId, optionId], references: [pollId, id], onDelete: Cascade)
+  optionId  String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @default(now()) @updatedAt
+
+  @@id([pollId, userId])
+  @@index([optionId])
+  @@map("poll_vote")
 }
 
 model Session {
@@ -103,6 +152,7 @@ model User {
   sessions      Session[]
   accounts      Account[]
   quacks        Quack[]
+  pollVotes     PollVote[]
   role          UserRole  @default(user)
 
   username        String? @db.VarChar(50)
