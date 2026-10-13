@@ -42,6 +42,14 @@ Before trusting what the browser shows, confirm the backend watcher actually pic
 
 Review every file `pnpm dlx shadcn@latest add` writes before committing. Besides the shadows above, the CLI has been seen to import `cn` from a third-party npm package (`import { cn } from "cn"`) and add that package to `package.json` — change the import to `@/lib/utils` and drop the dependency. One `cn` helper in the codebase, not two.
 
+### Model new entities for the next feature, not just this one
+
+When a feature needs new data, ask what it will plausibly grow into and, if the more robust or more scalable shape costs about the same now, choose it now. A migration later costs far more than an extra table or constraint today. Concretely: give a concept that can grow its own table instead of columns on an existing one; let the database enforce an invariant (unique index, composite key, foreign key) instead of application code checking it; keep an id on a row when a constraint needs it, even if it is derivable through a join.
+
+The worked example is the quack poll (`.plans/quack-polls/plan.md`). The first draft hung `PollOption` and `PollVote` straight off `Quack`, because a poll had no attributes of its own. The merged version adds a `Poll` satellite with a 1:1 relation to `Quack`: "has a poll" is a row instead of an inference from existing options, a vote belongs to a poll rather than a post, and closing time or multiple choice have a home without moving data. One join was the whole price. In the same spirit, "one person, one vote" is the primary key `(pollId, userId)` on `poll_vote`, and the composite foreign key `(pollId, optionId) → poll_option(pollId, id)` makes it impossible to store a vote for an option of a different poll — two guarantees no concurrent request can break and no service test has to re-prove.
+
+Don't confuse this with building features nobody asked for: the rule is about the shape of the data, not about adding fields, endpoints or screens on speculation.
+
 ### Regenerate the Prisma client after a schema change
 
 `pnpm backend prisma:migrations:run` writes and applies the migration but does not refresh the generated client in `apps/backend/src/generated/`. Run `pnpm backend prisma:generate` right after, or the next `pnpm backend test` fails with "Property X does not exist" against the stale types — a confusing error for a migration that just succeeded.
