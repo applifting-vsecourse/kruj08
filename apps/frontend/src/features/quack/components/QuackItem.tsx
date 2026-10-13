@@ -3,6 +3,7 @@ import { formatDate } from "@/lib/date"
 
 import type { Quack } from "@/features/quack/api/quackSchemas"
 import { QuackMoodLabel } from "@/features/quack/components/QuackMoodLabel"
+import { QuackPoll } from "@/features/quack/components/QuackPoll"
 import { UsersName } from "@/features/quack/components/UsersName"
 import { UsersUserName } from "@/features/quack/components/UsersUserName"
 
@@ -43,6 +44,15 @@ export function QuackItem({ quack }: QuackItemProps) {
           ) : null}
         </div>
         <p className="text-sm break-words whitespace-pre-line">{quack.text}</p>
+        {/* The text is the question; the poll sits right under it. No card —
+            spacing alone separates it from the text (see DESIGN.md). */}
+        {quack.poll ? (
+          <QuackPoll
+            quackId={quack.id}
+            poll={quack.poll}
+            className="mt-2"
+          />
+        ) : null}
       </div>
     </article>
   )
