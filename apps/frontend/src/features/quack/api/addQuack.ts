@@ -1,6 +1,7 @@
 import { api } from "@/lib/api-client"
+import type { QuackMood } from "@/lib/quack-mood"
 
-import { quackSchema, type Quack, type QuackMood } from "@/features/quack/api/quackSchemas"
+import { quackSchema, type Quack } from "@/features/quack/api/quackSchemas"
 
 export type AddQuackInput = {
   text: string

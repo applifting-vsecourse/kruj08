@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router"
-import { LogOut } from "lucide-react"
+import { LogOut, Settings } from "lucide-react"
 
+import { ROUTES } from "@/app/routes"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,7 +26,7 @@ export function HeaderMenu() {
         asChild
         size="sm"
       >
-        <Link to="/login">Sign in</Link>
+        <Link to={ROUTES.login}>Sign in</Link>
       </Button>
     )
   }
@@ -62,6 +63,12 @@ export function HeaderMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to={ROUTES.settings}>
+            <Settings className="size-4" />
+            Settings
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => signOut.mutate()}
           disabled={signOut.isPending}

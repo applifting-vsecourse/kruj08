@@ -108,6 +108,12 @@ model User {
   username        String? @db.VarChar(50)
   displayUsername String? @db.VarChar(50)
 
+  // Profile settings edited on the Settings page. BetterAuth owns the columns
+  // above; these belong to the app. The mood reuses the quack enum so the
+  // default and the post can never disagree.
+  bio         String?    @db.VarChar(160)
+  defaultMood QuackMood?
+
   @@unique([email])
   @@unique([username])
   @@map("user")
