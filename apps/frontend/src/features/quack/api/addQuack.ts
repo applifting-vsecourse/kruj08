@@ -7,6 +7,8 @@ export type AddQuackInput = {
   text: string
   // Left out of the request body when undefined, so the server stores null.
   mood?: QuackMood
+  // Left out for a plain quack. The quack's text is the poll's question.
+  poll?: { options: string[] }
 }
 
 export async function addQuack(input: AddQuackInput): Promise<Quack> {
