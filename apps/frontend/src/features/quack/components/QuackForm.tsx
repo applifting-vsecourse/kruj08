@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { ListChecks, Loader2, Plus, X } from "lucide-react"
 import { useFieldArray, useForm, useWatch } from "react-hook-form"
@@ -40,13 +41,23 @@ const pollOptionSchema = z.object({
     .max(POLL_OPTION_MAX_LENGTH, `Keep it under ${POLL_OPTION_MAX_LENGTH} characters`),
 })
 
+// An empty list means "no poll" — the form always carries the key because
+// useFieldArray writes an empty array back whenever the value is missing, and
+// a key that comes and goes would make the dirty check lie.
 const pollSchema = z
   .object({
-    options: z.array(pollOptionSchema).min(POLL_OPTIONS_MIN).max(POLL_OPTIONS_MAX),
+    options: z.array(pollOptionSchema).max(POLL_OPTIONS_MAX),
   })
-  // Two options that read the same once trimmed would be one choice shown
-  // twice. The message lands on the later duplicate, under its own field.
   .superRefine((poll, ctx) => {
+    if (poll.options.length > 0 && poll.options.length < POLL_OPTIONS_MIN) {
+      ctx.addIssue({
+        code: "custom",
+        message: `A poll needs at least ${POLL_OPTIONS_MIN} options`,
+        path: ["options"],
+      })
+    }
+    // Two options that read the same once trimmed would be one choice shown
+    // twice. The message lands on the later duplicate, under its own field.
     const seen = new Set<string>()
     poll.options.forEach((option, index) => {
       const text = option.text.trim()
@@ -69,8 +80,7 @@ const schema = z.object({
     .max(MAX_LENGTH, `Keep it under ${MAX_LENGTH} characters`),
   // Optional: a quack without a mood is the default, not a validation error.
   mood: quackMoodSchema.optional(),
-  // Optional: absent for a plain quack, present once "Add poll" was clicked.
-  poll: pollSchema.optional(),
+  poll: pollSchema,
 })
 
 type FormValues = z.infer<typeof schema>
@@ -79,50 +89,51 @@ const emptyOptions = () => Array.from({ length: POLL_OPTIONS_MIN }, () => ({ tex
 
 type QuackFormProps = {
   className?: string
+  // Reports whether the form holds edits that would be lost on navigation.
+  // The route turns it into a guard, so the form itself stays router-free.
+  onDirtyChange?: (isDirty: boolean) => void
   // The mood from the user's settings, preselected so a post starts with it.
   // Clicking the active mood still clears it for that one post.
   defaultMood?: QuackMood | null
 }
 
-export function QuackForm({ className, defaultMood = null }: QuackFormProps) {
+export function QuackForm({ className, defaultMood = null, onDirtyChange }: QuackFormProps) {
   const addQuack = useAddQuack()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { text: "", mood: defaultMood ?? undefined, poll: undefined },
+    defaultValues: { text: "", mood: defaultMood ?? undefined, poll: { options: [] } },
   })
+
+  const { isDirty } = form.formState
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
   const text = useWatch({ control: form.control, name: "text" })
   const length = text?.length ?? 0
 
-  // The field array is the source of truth for "is there a poll": setting the
-  // parent `poll` value would not update the array's own state, so the poll
-  // is added and removed through the array itself.
+  // The field array is the source of truth for "is there a poll": the poll is
+  // added and removed through it, never by setting the parent value.
   const options = useFieldArray({ control: form.control, name: "poll.options" })
   const hasPoll = options.fields.length > 0
-
   const addPoll = () => options.replace(emptyOptions())
-  const removePoll = () => {
-    options.replace([])
-    // Leave no `{ options: [] }` behind: the schema treats "no poll" as absent.
-    form.setValue("poll", undefined)
-  }
+  const removePoll = () => options.replace([])
 
   const handleSubmit = (values: FormValues) => {
     addQuack.mutate(
       {
         text: values.text,
         mood: values.mood,
-        poll: values.poll
-          ? { options: values.poll.options.map((option) => option.text) }
-          : undefined,
+        poll:
+          values.poll.options.length > 0
+            ? { options: values.poll.options.map((option) => option.text) }
+            : undefined,
       },
       // Reset to the current default rather than the values captured at mount,
       // so a default changed in Settings is picked up after the next post.
       {
-        onSuccess: () => {
-          options.replace([])
-          form.reset({ text: "", mood: defaultMood ?? undefined, poll: undefined })
-        },
+        onSuccess: () =>
+          form.reset({ text: "", mood: defaultMood ?? undefined, poll: { options: [] } }),
       },
     )
   }

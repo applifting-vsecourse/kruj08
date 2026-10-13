@@ -3,6 +3,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 
 import { Seo } from "@/components/Seo"
+import { UnsavedChangesGuard } from "@/components/UnsavedChangesGuard"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 
 import { profileQueryOptions } from "@/features/profile/api/profileQueryOptions"
@@ -24,6 +25,9 @@ const SEARCH_DEBOUNCE_MS = 300
 function QuacksPage() {
   const { data: profile } = useSuspenseQuery(profileQueryOptions())
   const [searchInput, setSearchInput] = useState("")
+  // A half-written quack (or poll) is worth a warning before the user leaves.
+  // The form reports its dirty state; the route owns the guard, as Settings does.
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const search = normalizeQuackSearch(useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS))
   const quacksQuery = useQuery(quacksQueryOptions({ search }))
 
@@ -35,6 +39,7 @@ function QuacksPage() {
   return (
     <>
       <Seo title="Quacks" />
+      <UnsavedChangesGuard hasUnsavedChanges={hasUnsavedChanges} />
       <section className="mx-auto w-full max-w-2xl px-4 py-8">
         <h1 className="mb-4 text-2xl font-semibold tracking-tight">Quacks</h1>
 
@@ -43,6 +48,7 @@ function QuacksPage() {
         <QuackForm
           className="mb-6"
           defaultMood={profile.defaultMood}
+          onDirtyChange={setHasUnsavedChanges}
         />
 
         <QuackSearch
