@@ -15,10 +15,9 @@ import {
 } from "@/components/ui/form"
 import { Textarea } from "@/components/ui/textarea"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { QUACK_MOOD_OPTIONS, quackMoodSchema, type QuackMood } from "@/lib/quack-mood"
 import { cn } from "@/lib/utils"
 
-import { quackMoodSchema } from "@/features/quack/api/quackSchemas"
-import { QUACK_MOOD_OPTIONS } from "@/features/quack/components/QuackMoodLabel"
 import { useAddQuack } from "@/features/quack/hooks/useAddQuack"
 
 // Mirrors the server-side DTO (MaxLength(280)) so the user is told before
@@ -37,20 +36,30 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-type QuackFormProps = { className?: string }
+type QuackFormProps = {
+  className?: string
+  // The mood from the user's settings, preselected so a post starts with it.
+  // Clicking the active mood still clears it for that one post.
+  defaultMood?: QuackMood | null
+}
 
-export function QuackForm({ className }: QuackFormProps) {
+export function QuackForm({ className, defaultMood = null }: QuackFormProps) {
   const addQuack = useAddQuack()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { text: "", mood: undefined },
+    defaultValues: { text: "", mood: defaultMood ?? undefined },
   })
 
   const text = useWatch({ control: form.control, name: "text" })
   const length = text?.length ?? 0
 
   const handleSubmit = (values: FormValues) => {
-    addQuack.mutate({ text: values.text, mood: values.mood }, { onSuccess: () => form.reset() })
+    addQuack.mutate(
+      { text: values.text, mood: values.mood },
+      // Reset to the current default rather than the values captured at mount,
+      // so a default changed in Settings is picked up after the next post.
+      { onSuccess: () => form.reset({ text: "", mood: defaultMood ?? undefined }) },
+    )
   }
 
   return (

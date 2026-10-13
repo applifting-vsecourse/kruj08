@@ -35,11 +35,14 @@ export async function createUser(
     throw new Error(`Failed to create user with email: ${email}`);
   }
 
-  // assign a role to the user directly
+  // assign a role and the handle directly. BetterAuth's username plugin keeps
+  // the handle twice — lowercased for uniqueness and as typed for display —
+  // and the seed follows the same shape so both read paths agree.
   await prisma.user.update({
     where: { id: user.id },
     data: {
-      username,
+      username: username.toLowerCase(),
+      displayUsername: username,
       role: role as UserRole,
     },
   });
