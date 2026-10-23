@@ -7,6 +7,7 @@ import {
   QuackHasNoPollError,
   QuackMood,
   QuackNotFoundError,
+  QuackNotOwnedError,
 } from '@/modules/quack/domain/quack';
 import {
   QuackListFilter,
@@ -77,6 +78,21 @@ export class QuacksService {
         ? normalizePollOptions(quackData.pollOptions)
         : undefined,
     });
+  }
+
+  // Soft delete, author only. The role is deliberately not consulted: an admin
+  // deletes someone else's quack no more than anyone else does.
+  async deleteQuack(user: Identity, quackId: string): Promise<void> {
+    if (await this.quackRepository.softDeleteOwnQuack(quackId, user.id)) {
+      return;
+    }
+    // Nothing was deleted. The write already decided that; this read only
+    // picks which error to report.
+    const authorId = await this.quackRepository.findQuackAuthorId(quackId);
+    if (authorId === null) {
+      throw new QuackNotFoundError(quackId);
+    }
+    throw new QuackNotOwnedError(quackId);
   }
 
   // Casting a first vote and changing it are the same operation: the viewer

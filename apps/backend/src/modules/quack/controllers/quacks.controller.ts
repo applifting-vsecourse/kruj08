@@ -3,6 +3,7 @@ import {
   PollOptionNotFoundError,
   QuackHasNoPollError,
   QuackNotFoundError,
+  QuackNotOwnedError,
 } from '@/modules/quack/domain/quack';
 import { QuacksService } from '@/modules/quack/services/quacks.service';
 import { User } from '@/shared/auth/decorators/user.decorator';
@@ -12,6 +13,8 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -125,6 +128,38 @@ export class QuacksController {
       }
       if (error instanceof PollOptionNotFoundError) {
         throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Delete one of your own quacks',
+    description:
+      'Only the author may delete a quack; the admin role gets no exception. The quack disappears from the feed, search and voting for everyone, together with its poll. It cannot be undone.',
+  })
+  @ApiParam({ name: 'id', description: 'Id of the quack to delete' })
+  @ApiResponse({ status: 204, description: 'Deleted' })
+  @ApiResponse({ status: 401, description: 'Not signed in' })
+  @ApiResponse({
+    status: 403,
+    description: 'The quack belongs to someone else',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Quack not found or already deleted',
+  })
+  async delete(@User() user: Identity, @Param('id') id: string): Promise<void> {
+    try {
+      await this.quacksService.deleteQuack(user, id);
+    } catch (error) {
+      if (error instanceof QuackNotFoundError) {
+        throw new NotFoundException(error.message);
+      }
+      if (error instanceof QuackNotOwnedError) {
+        throw new ForbiddenException(error.message);
       }
       throw error;
     }

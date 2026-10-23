@@ -40,6 +40,18 @@ describe('QuackResponseDto', () => {
     });
   });
 
+  describe('canDelete', () => {
+    it('is true for the author', () => {
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), 'author');
+      expect(dto.canDelete).toBe(true);
+    });
+
+    it('is false for anyone else', () => {
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll('o1'), 'viewer');
+      expect(dto.canDelete).toBe(false);
+    });
+  });
+
   it('keeps the poll id out of the response', () => {
     const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), 'viewer');
     expect(dto.poll).not.toHaveProperty('id');

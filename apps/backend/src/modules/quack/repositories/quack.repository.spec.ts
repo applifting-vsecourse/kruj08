@@ -30,6 +30,7 @@ const fakePrisma = (): { prisma: FakePrisma; repository: QuackRepository } => {
     ]),
   );
   quack.create = jest.fn();
+  quack.updateMany = jest.fn().mockResolvedValue({ count: 1 });
   const prisma: FakePrisma = { quack, pollVote: { upsert: jest.fn() } };
   return {
     prisma,
@@ -67,12 +68,18 @@ const READS: {
     label: 'one quack, e.g. before a vote',
     call: (repository) => repository.findQuackById('q1', 'viewer'),
   },
+  {
+    method: 'findQuackAuthorId',
+    label: 'the author of a quack',
+    call: (repository) => repository.findQuackAuthorId('q1'),
+  },
 ];
 
 // Methods that only write. They are exempt from the check above.
 const WRITES: (keyof QuackRepository)[] = [
   'createQuack',
   'upsertVote',
+  'softDeleteOwnQuack',
 ];
 
 describe('QuackRepository', () => {
@@ -114,4 +121,27 @@ describe('QuackRepository', () => {
     );
   });
 
+  describe('softDeleteOwnQuack', () => {
+    it('checks the author and that the quack is still there in the same write', async () => {
+      const { prisma, repository } = fakePrisma();
+
+      await expect(repository.softDeleteOwnQuack('q1', 'u1')).resolves.toBe(
+        true,
+      );
+
+      expect(prisma.quack.updateMany).toHaveBeenCalledWith({
+        where: { id: 'q1', userId: 'u1', deletedAt: null },
+        data: { deletedAt: expect.any(Date) as unknown },
+      });
+    });
+
+    it('reports when nothing matched', async () => {
+      const { prisma, repository } = fakePrisma();
+      prisma.quack.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(repository.softDeleteOwnQuack('q1', 'u1')).resolves.toBe(
+        false,
+      );
+    });
+  });
 });

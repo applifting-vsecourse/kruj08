@@ -145,6 +145,27 @@ export class QuackRepository {
     return quack ? mapPrismaQuackToDomain(quack) : null;
   }
 
+  // Who wrote the quack, or null when it does not exist (or is deleted). Only
+  // the author's id: the caller needs it to tell "not yours" from "gone".
+  async findQuackAuthorId(id: string): Promise<string | null> {
+    const quack = await this.prisma.quack.findUnique({
+      where: notDeleted({ id }),
+      select: { userId: true },
+    });
+    return quack?.userId ?? null;
+  }
+
+  // Ownership check and write in one statement: the row is only touched when
+  // it is still there and belongs to `userId`, so no request can slip in
+  // between a check and the update. Returns whether anything was deleted.
+  async softDeleteOwnQuack(id: string, userId: string): Promise<boolean> {
+    const { count } = await this.prisma.quack.updateMany({
+      where: notDeleted({ id, userId }),
+      data: { deletedAt: new Date() },
+    });
+    return count > 0;
+  }
+
   async createQuack(createQuackData: {
     text: string;
     mood: QuackMood | null;
