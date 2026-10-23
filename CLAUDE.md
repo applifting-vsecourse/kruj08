@@ -46,6 +46,8 @@ A git worktree is a second checkout, so it needs its own `pnpm install` (the pnp
 
 Everything port-related is derived from those `.env` files — `PORT`, `BACKEND_URL` and `FRONTEND_URL` (CORS and BetterAuth trusted origins), `DATABASE_URL` and `DB_HOST_PORT` (compose mapping), `VITE_PORT` and `VITE_API_URL`. Change them together or not at all: the backend only accepts requests from the exact `FRONTEND_URL` origin, so a lone edit shows up as an opaque CORS error.
 
+Run `pnpm dev:down` in a worktree before archiving it. The desktop app removes worktrees without doing that, and a left-behind Postgres container keeps running (`restart: always`), holds its port and blocks its slot; `pnpm docker:prune` removes the stacks of worktrees that no longer exist (`--dry-run` only lists them).
+
 Browser cookies are per host, not per port, so a login in one stack logs the other out when both are driven from the same browser profile. Use the built-in browser pane for one of them, or `127.0.0.1` for one and `localhost` for the other.
 
 ### Fix what the shadcn CLI generates
