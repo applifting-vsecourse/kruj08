@@ -22,6 +22,7 @@ type FakePrisma = {
   quackDeletion: { create: jest.Mock };
   pollVote: { upsert: jest.Mock };
   $transaction: jest.Mock;
+  $executeRaw: jest.Mock;
 };
 
 const fakePrisma = (): { prisma: FakePrisma; repository: QuackRepository } => {
@@ -37,6 +38,8 @@ const fakePrisma = (): { prisma: FakePrisma; repository: QuackRepository } => {
     quack,
     quackDeletion: { create: jest.fn() },
     pollVote: { upsert: jest.fn() },
+    // Rows changed by a raw statement; one unless a test says otherwise.
+    $executeRaw: jest.fn().mockResolvedValue(1),
     // An interactive transaction runs its callback against the same fake.
     $transaction: jest.fn((run: (tx: unknown) => Promise<unknown>) =>
       run(prisma),
@@ -101,7 +104,7 @@ const WRITES: (keyof QuackRepository)[] = [
   'createQuack',
   'upsertVote',
   'softDeleteOwnQuack',
-  'softDeleteAnyQuack',
+  'softDeleteQuackAsModerator',
 ];
 
 describe('QuackRepository', () => {
@@ -216,40 +219,64 @@ describe('QuackRepository', () => {
     });
   });
 
-  describe('softDeleteAnyQuack', () => {
-    it('deletes regardless of the author, but only a quack still there', async () => {
+  describe('softDeleteQuackAsModerator', () => {
+    // The raw statement the call made: its SQL with the parameters marked, and
+    // the parameter values in order.
+    const rawUpdate = (
+      prisma: FakePrisma,
+    ): { sql: string; values: unknown[] } => {
+      expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+      const [strings, ...values] = prisma.$executeRaw.mock.calls[0] as [
+        TemplateStringsArray,
+        ...unknown[],
+      ];
+      return { sql: strings.join('?').replace(/\s+/g, ' ').trim(), values };
+    };
+
+    it('checks the role in the database in the same statement that deletes', async () => {
       const { prisma, repository } = fakePrisma();
 
       await expect(
-        repository.softDeleteAnyQuack('q1', 'admin1', 'Quackery'),
+        repository.softDeleteQuackAsModerator('q1', 'admin1', 'Quackery'),
       ).resolves.toBe(true);
 
-      expect(prisma.quack.updateMany).toHaveBeenCalledWith({
-        where: { id: 'q1', deletedAt: null },
-        data: { deletedAt: expect.any(Date) as unknown },
-      });
+      const { sql, values } = rawUpdate(prisma);
+      // only a quack that is still there, with no author condition, and only
+      // while the user holds a moderator role
+      expect(sql).toBe(
+        'UPDATE "quack" SET "deletedAt" = ?, "updatedAt" = ? WHERE "id" = ? AND "deletedAt" IS NULL AND EXISTS ( SELECT 1 FROM "user" WHERE "id" = ? AND "role"::text = ANY(?) )',
+      );
+      const [deletedAt, updatedAt, ...rest] = values;
+      expect(deletedAt).toBeInstanceOf(Date);
+      expect(updatedAt).toBe(deletedAt);
+      expect(rest).toEqual(['q1', 'admin1', ['admin']]);
+      expect(prisma.quack.updateMany).not.toHaveBeenCalled();
     });
 
-    it('records the admin and the reason', async () => {
+    it('records the moderator and the reason, at the same instant', async () => {
       const { prisma, repository } = fakePrisma();
 
-      await repository.softDeleteAnyQuack('q1', 'admin1', 'Quackery');
+      await repository.softDeleteQuackAsModerator('q1', 'admin1', 'Quackery');
 
+      const [deletedAt] = rawUpdate(prisma).values;
       expect(prisma.quackDeletion.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
+        data: {
           quackId: 'q1',
           deletedById: 'admin1',
           reason: 'Quackery',
-        }) as unknown,
+          createdAt: deletedAt,
+        },
       });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
 
-    it('records nothing when the quack is gone already', async () => {
+    it('records nothing when the statement matched nothing', async () => {
+      // the quack is gone, or the user is no moderator in the database
       const { prisma, repository } = fakePrisma();
-      prisma.quack.updateMany.mockResolvedValue({ count: 0 });
+      prisma.$executeRaw.mockResolvedValue(0);
 
       await expect(
-        repository.softDeleteAnyQuack('q1', 'admin1', 'Quackery'),
+        repository.softDeleteQuackAsModerator('q1', 'admin1', 'Quackery'),
       ).resolves.toBe(false);
       expect(prisma.quackDeletion.create).not.toHaveBeenCalled();
     });

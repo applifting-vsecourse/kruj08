@@ -2,6 +2,7 @@ import {
   canModerateQuacks,
   DeletionReasonRequiredError,
   InvalidPollError,
+  NotAModeratorError,
   POLL_OPTION_MAX_LENGTH,
   POLL_OPTIONS_MAX,
   POLL_OPTIONS_MIN,
@@ -89,7 +90,8 @@ export class QuacksService {
 
   // Soft delete. An admin may delete any quack and must say why; anyone else
   // only their own, and no reason is asked or kept. Either way the repository
-  // records who did it.
+  // checks the right to delete inside the write and records who did it; the
+  // role in the session only picks the path and whether a reason is needed.
   async deleteQuack(
     user: Identity,
     quackId: string,
@@ -103,12 +105,20 @@ export class QuacksService {
         throw new DeletionReasonRequiredError(quackId);
       }
       if (
-        await this.quackRepository.softDeleteAnyQuack(quackId, user.id, trimmed)
+        await this.quackRepository.softDeleteQuackAsModerator(
+          quackId,
+          user.id,
+          trimmed,
+        )
       ) {
         return;
       }
-      // Without an author condition, nothing matching means it is gone.
-      throw new QuackNotFoundError(quackId);
+      // Nothing was deleted: either the quack is gone, or the database no
+      // longer counts this user as a moderator. The read only picks which.
+      if ((await this.quackRepository.findQuackAuthorId(quackId)) === null) {
+        throw new QuackNotFoundError(quackId);
+      }
+      throw new NotAModeratorError(user.id);
     }
 
     if (await this.quackRepository.softDeleteOwnQuack(quackId, user.id)) {

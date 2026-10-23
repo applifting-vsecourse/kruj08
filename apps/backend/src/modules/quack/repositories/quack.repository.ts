@@ -7,6 +7,7 @@ import {
   User as PrismaUser,
 } from '@/generated/prisma/client';
 import {
+  MODERATOR_ROLES,
   Poll,
   PollOptionNotFoundError,
   Quack,
@@ -131,22 +132,22 @@ const buildWhere = (filter: QuackListFilter): Prisma.QuackWhereInput => ({
 });
 
 // Marks the quack deleted and writes the record of who did it, in one
-// transaction. The update's `where` alone decides whether there is anything
-// to delete, so no request can slip in between a check and the write. Of two
-// concurrent deletions the second waits on the row, then matches nothing:
-// the record that stays is the first one's.
+// transaction. `markDeleted` is a single UPDATE whose condition alone decides
+// whether there is anything to delete and whether this user may, so no
+// request can slip in between a check and the write. It returns the number of
+// rows it changed. Of two concurrent deletions the second waits on the row,
+// then matches nothing: the record that stays is the first one's.
 const softDelete = (
   prisma: PrismaService,
-  where: Prisma.QuackWhereInput,
+  markDeleted: (
+    tx: Prisma.TransactionClient,
+    deletedAt: Date,
+  ) => Promise<number>,
   deletion: { quackId: string; deletedById: string; reason: string | null },
 ): Promise<boolean> =>
   prisma.$transaction(async (tx) => {
     const deletedAt = new Date();
-    const { count } = await tx.quack.updateMany({
-      where: notDeleted(where),
-      data: { deletedAt },
-    });
-    if (count === 0) {
+    if ((await markDeleted(tx, deletedAt)) === 0) {
       return false;
     }
     await tx.quackDeletion.create({
@@ -200,23 +201,44 @@ export class QuackRepository {
   async softDeleteOwnQuack(id: string, userId: string): Promise<boolean> {
     return softDelete(
       this.prisma,
-      { id, userId },
+      async (tx, deletedAt) => {
+        const { count } = await tx.quack.updateMany({
+          where: notDeleted({ id, userId }),
+          data: { deletedAt },
+        });
+        return count;
+      },
       { quackId: id, deletedById: userId, reason: null },
     );
   }
 
-  // An admin removing a quack. No author condition — that is the point — so
-  // nothing matching means the quack is gone. The service makes sure the
-  // caller is an admin and gave a reason.
-  async softDeleteAnyQuack(
+  // A moderator removing any quack. Whether `moderatorId` moderates is part
+  // of the write, just like the author above: the row is only touched when
+  // the database, at that moment, gives the user one of MODERATOR_ROLES —
+  // whatever the caller or the session believed. Returns whether anything was
+  // deleted; the caller tells "gone" from "not a moderator" with a read.
+  //
+  // Raw SQL because updateMany can only filter on rows related to the quack,
+  // and the moderator is not one. The statement therefore spells out what
+  // Prisma would do for us: the `notDeleted` condition and @updatedAt.
+  async softDeleteQuackAsModerator(
     id: string,
-    adminId: string,
+    moderatorId: string,
     reason: string,
   ): Promise<boolean> {
     return softDelete(
       this.prisma,
-      { id },
-      { quackId: id, deletedById: adminId, reason },
+      (tx, deletedAt) => tx.$executeRaw`
+        UPDATE "quack"
+        SET "deletedAt" = ${deletedAt}, "updatedAt" = ${deletedAt}
+        WHERE "id" = ${id}
+          AND "deletedAt" IS NULL
+          AND EXISTS (
+            SELECT 1 FROM "user"
+            WHERE "id" = ${moderatorId}
+              AND "role"::text = ANY(${[...MODERATOR_ROLES]})
+          )`,
+      { quackId: id, deletedById: moderatorId, reason },
     );
   }
 
