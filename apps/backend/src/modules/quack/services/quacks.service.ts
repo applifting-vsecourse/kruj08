@@ -1,4 +1,6 @@
 import {
+  canModerateQuacks,
+  DeletionReasonRequiredError,
   InvalidPollError,
   POLL_OPTION_MAX_LENGTH,
   POLL_OPTIONS_MAX,
@@ -85,9 +87,30 @@ export class QuacksService {
     });
   }
 
-  // Soft delete, author only. The role is deliberately not consulted: an admin
-  // deletes someone else's quack no more than anyone else does.
-  async deleteQuack(user: Identity, quackId: string): Promise<void> {
+  // Soft delete. An admin may delete any quack and must say why; anyone else
+  // only their own, and no reason is asked or kept. Either way the repository
+  // records who did it.
+  async deleteQuack(
+    user: Identity,
+    quackId: string,
+    reason?: string,
+  ): Promise<void> {
+    if (canModerateQuacks(user.role)) {
+      // The DTO trims already; this keeps "   " from counting as a reason
+      // for any other caller too.
+      const trimmed = reason?.trim();
+      if (!trimmed) {
+        throw new DeletionReasonRequiredError(quackId);
+      }
+      if (
+        await this.quackRepository.softDeleteAnyQuack(quackId, user.id, trimmed)
+      ) {
+        return;
+      }
+      // Without an author condition, nothing matching means it is gone.
+      throw new QuackNotFoundError(quackId);
+    }
+
     if (await this.quackRepository.softDeleteOwnQuack(quackId, user.id)) {
       return;
     }

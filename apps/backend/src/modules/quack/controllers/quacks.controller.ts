@@ -1,4 +1,5 @@
 import {
+  DeletionReasonRequiredError,
   InvalidPollError,
   PollOptionNotFoundError,
   QuackHasNoPollError,
@@ -28,6 +29,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import {
+  ApiBody,
   ApiCookieAuth,
   ApiOperation,
   ApiParam,
@@ -35,6 +37,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateQuackDto } from './dto/create-quack.dto';
+import { DeleteQuackDto } from './dto/delete-quack.dto';
 import { ListQuacksQueryDto } from './dto/list-quacks-query.dto';
 import { QuackResponseDto } from './dto/quack.response.dto';
 import { VoteDto } from './dto/vote.dto';
@@ -69,7 +72,7 @@ export class QuacksController {
       search: query.search,
       author: query.author,
     });
-    return quacks.map((quack) => QuackResponseDto.fromDomain(quack, user.id));
+    return quacks.map((quack) => QuackResponseDto.fromDomain(quack, user));
   }
 
   @Post()
@@ -88,7 +91,7 @@ export class QuacksController {
         mood: body.mood,
         pollOptions: body.poll?.options,
       });
-      return QuackResponseDto.fromDomain(quack, user.id);
+      return QuackResponseDto.fromDomain(quack, user);
     } catch (error) {
       if (error instanceof InvalidPollError) {
         throw new BadRequestException(error.message);
@@ -119,7 +122,7 @@ export class QuacksController {
   ): Promise<QuackResponseDto> {
     try {
       const quack = await this.quacksService.vote(user, id, body.optionId);
-      return QuackResponseDto.fromDomain(quack, user.id);
+      return QuackResponseDto.fromDomain(quack, user);
     } catch (error) {
       // Domain errors become HTTP here, at the boundary, so the service stays
       // free of status codes.
@@ -139,25 +142,37 @@ export class QuacksController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
-    summary: 'Delete one of your own quacks',
+    summary: 'Delete one of your own quacks, or any quack as an admin',
     description:
-      'Only the author may delete a quack; the admin role gets no exception. The quack disappears from the feed, search and voting for everyone, together with its poll. It cannot be undone.',
+      'An author may delete their own quack. An admin may delete any quack, and must give a reason every time, for their own quacks too. The quack disappears from the feed, search and voting for everyone, together with its poll, and who deleted it is recorded. It cannot be undone.',
   })
   @ApiParam({ name: 'id', description: 'Id of the quack to delete' })
+  @ApiBody({ type: DeleteQuackDto, required: false })
   @ApiResponse({ status: 204, description: 'Deleted' })
+  @ApiResponse({
+    status: 400,
+    description: 'An admin gave no reason, or the reason is too long',
+  })
   @ApiResponse({ status: 401, description: 'Not signed in' })
   @ApiResponse({
     status: 403,
-    description: 'The quack belongs to someone else',
+    description: 'The quack belongs to someone else and you are not an admin',
   })
   @ApiResponse({
     status: 404,
     description: 'Quack not found or already deleted',
   })
-  async delete(@User() user: Identity, @Param('id') id: string): Promise<void> {
+  async delete(
+    @User() user: Identity,
+    @Param('id') id: string,
+    @Body() body: DeleteQuackDto,
+  ): Promise<void> {
     try {
-      await this.quacksService.deleteQuack(user, id);
+      await this.quacksService.deleteQuack(user, id, body.reason);
     } catch (error) {
+      if (error instanceof DeletionReasonRequiredError) {
+        throw new BadRequestException(error.message);
+      }
       if (error instanceof QuackNotFoundError) {
         throw new NotFoundException(error.message);
       }

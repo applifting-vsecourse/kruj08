@@ -1,6 +1,7 @@
 // Example unit test — the pattern to copy for your own services.
 // The repository is mocked, so the test exercises the service in isolation.
 import {
+  DeletionReasonRequiredError,
   InvalidPollError,
   Poll,
   Quack,
@@ -36,7 +37,7 @@ const aPoll = (overrides: Partial<Poll> = {}): Poll => ({
   ...overrides,
 });
 
-const viewer = { id: 'u1' } as Identity;
+const viewer = { id: 'u1', role: 'user' } as Identity;
 const admin = { id: 'admin1', role: 'admin' } as Identity;
 
 describe('QuacksService', () => {
@@ -223,20 +224,74 @@ describe('QuacksService', () => {
       );
     });
 
-    it('refuses an admin too: the role is no bypass', async () => {
+    it('keeps no reason from an author', async () => {
       const repository = mock<QuackRepository>();
-      repository.softDeleteOwnQuack.mockResolvedValue(false);
-      repository.findQuackAuthorId.mockResolvedValue('u1');
+      repository.softDeleteOwnQuack.mockResolvedValue(true);
+
+      const service = new QuacksService(repository);
+
+      await service.deleteQuack(viewer, 'q1', 'changed my mind');
+      expect(repository.softDeleteOwnQuack).toHaveBeenCalledWith('q1', 'u1');
+      expect(repository.softDeleteAnyQuack).not.toHaveBeenCalled();
+    });
+
+    it("lets an admin delete someone else's quack with a reason", async () => {
+      const repository = mock<QuackRepository>();
+      repository.softDeleteAnyQuack.mockResolvedValue(true);
+
+      const service = new QuacksService(repository);
+
+      await expect(
+        service.deleteQuack(admin, 'q1', '  Quackery  '),
+      ).resolves.toBeUndefined();
+      // no author condition, the admin on record, the reason trimmed
+      expect(repository.softDeleteAnyQuack).toHaveBeenCalledWith(
+        'q1',
+        'admin1',
+        'Quackery',
+      );
+      expect(repository.softDeleteOwnQuack).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['no reason', undefined],
+      ['an empty reason', ''],
+      ['a reason of only spaces', '   '],
+    ])('refuses an admin with %s', async (_label, reason) => {
+      const repository = mock<QuackRepository>();
+
+      const service = new QuacksService(repository);
+
+      await expect(
+        service.deleteQuack(admin, 'q1', reason),
+      ).rejects.toBeInstanceOf(DeletionReasonRequiredError);
+      expect(repository.softDeleteAnyQuack).not.toHaveBeenCalled();
+      expect(repository.softDeleteOwnQuack).not.toHaveBeenCalled();
+    });
+
+    it('asks an admin for a reason on their own quack too', async () => {
+      const repository = mock<QuackRepository>();
+      // The quack is the admin's own; the rule doesn't look at the author.
+      repository.findQuackAuthorId.mockResolvedValue('admin1');
 
       const service = new QuacksService(repository);
 
       await expect(service.deleteQuack(admin, 'q1')).rejects.toBeInstanceOf(
-        QuackNotOwnedError,
+        DeletionReasonRequiredError,
       );
-      expect(repository.softDeleteOwnQuack).toHaveBeenCalledWith(
-        'q1',
-        'admin1',
-      );
+    });
+
+    it('reports a quack an admin finds gone already as not found', async () => {
+      const repository = mock<QuackRepository>();
+      repository.softDeleteAnyQuack.mockResolvedValue(false);
+
+      const service = new QuacksService(repository);
+
+      await expect(
+        service.deleteQuack(admin, 'q1', 'Quackery'),
+      ).rejects.toBeInstanceOf(QuackNotFoundError);
+      // without an author condition there is nothing else it could be
+      expect(repository.findQuackAuthorId).not.toHaveBeenCalled();
     });
 
     it('reports a missing or already deleted quack as not found', async () => {

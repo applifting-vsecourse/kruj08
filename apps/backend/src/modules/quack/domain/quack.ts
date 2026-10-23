@@ -13,6 +13,13 @@ export const POLL_OPTIONS_MIN = 2;
 export const POLL_OPTIONS_MAX = 4;
 export const POLL_OPTION_MAX_LENGTH = 50;
 
+// The longest reason for deleting a quack. Mirrored in the frontend dialog.
+export const DELETION_REASON_MAX_LENGTH = 500;
+
+// Admins moderate the feed: they may delete any quack, and have to say why
+// every time, their own quacks included. Everyone else deletes only their own.
+export const canModerateQuacks = (role: string): boolean => role === 'admin';
+
 export type QuackAuthor = {
   id: string;
   name: string;
@@ -66,11 +73,19 @@ export class QuackNotFoundError extends Error {
   }
 }
 
-// Only the author may delete a quack. Admins included: there is no bypass.
+// Someone who is not an admin tried to delete a quack that isn't theirs.
 export class QuackNotOwnedError extends Error {
   constructor(quackId: string) {
     super(`Quack ${quackId} belongs to someone else`);
     this.name = 'QuackNotOwnedError';
+  }
+}
+
+// An admin tried to delete a quack without saying why.
+export class DeletionReasonRequiredError extends Error {
+  constructor(quackId: string) {
+    super(`Deleting quack ${quackId} as an admin needs a reason`);
+    this.name = 'DeletionReasonRequiredError';
   }
 }
 

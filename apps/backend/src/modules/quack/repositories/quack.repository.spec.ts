@@ -101,6 +101,7 @@ const WRITES: (keyof QuackRepository)[] = [
   'createQuack',
   'upsertVote',
   'softDeleteOwnQuack',
+  'softDeleteAnyQuack',
 ];
 
 describe('QuackRepository', () => {
@@ -211,6 +212,45 @@ describe('QuackRepository', () => {
       await expect(repository.softDeleteOwnQuack('q1', 'u1')).resolves.toBe(
         false,
       );
+      expect(prisma.quackDeletion.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('softDeleteAnyQuack', () => {
+    it('deletes regardless of the author, but only a quack still there', async () => {
+      const { prisma, repository } = fakePrisma();
+
+      await expect(
+        repository.softDeleteAnyQuack('q1', 'admin1', 'Quackery'),
+      ).resolves.toBe(true);
+
+      expect(prisma.quack.updateMany).toHaveBeenCalledWith({
+        where: { id: 'q1', deletedAt: null },
+        data: { deletedAt: expect.any(Date) as unknown },
+      });
+    });
+
+    it('records the admin and the reason', async () => {
+      const { prisma, repository } = fakePrisma();
+
+      await repository.softDeleteAnyQuack('q1', 'admin1', 'Quackery');
+
+      expect(prisma.quackDeletion.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          quackId: 'q1',
+          deletedById: 'admin1',
+          reason: 'Quackery',
+        }) as unknown,
+      });
+    });
+
+    it('records nothing when the quack is gone already', async () => {
+      const { prisma, repository } = fakePrisma();
+      prisma.quack.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        repository.softDeleteAnyQuack('q1', 'admin1', 'Quackery'),
+      ).resolves.toBe(false);
       expect(prisma.quackDeletion.create).not.toHaveBeenCalled();
     });
   });
