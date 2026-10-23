@@ -94,13 +94,18 @@ export type QuackListFilter = {
   search?: string;
 };
 
+// The one place that decides a deleted quack does not exist. Every read in
+// this repository wraps its `where` in it, and quack.repository.spec.ts fails
+// for a new method until it is checked against a deleted quack too.
+const notDeleted = <Where extends Prisma.QuackWhereInput>(
+  where: Where,
+): Where & { deletedAt: null } => ({ ...where, deletedAt: null });
+
 // Plain substring match on the text and on the author's name and username,
 // case-insensitive (ILIKE). This is deliberately not full-text search: no
 // stemming, no ranking. It composes with `take`/`cursor` once the feed pages.
-const buildWhere = (
-  filter: QuackListFilter,
-): Prisma.QuackWhereInput | undefined => {
-  if (!filter.search) return undefined;
+const buildWhere = (filter: QuackListFilter): Prisma.QuackWhereInput => {
+  if (!filter.search) return {};
   const contains = { contains: filter.search, mode: 'insensitive' as const };
   return {
     OR: [
@@ -125,7 +130,7 @@ export class QuackRepository {
     viewerId: string,
   ): Promise<Quack[]> {
     const quacks = await this.prisma.quack.findMany({
-      where: buildWhere(filter),
+      where: notDeleted(buildWhere(filter)),
       include: withPoll(viewerId),
       orderBy: { createdAt: 'desc' },
     });
@@ -134,7 +139,7 @@ export class QuackRepository {
 
   async findQuackById(id: string, viewerId: string): Promise<Quack | null> {
     const quack = await this.prisma.quack.findUnique({
-      where: { id },
+      where: notDeleted({ id }),
       include: withPoll(viewerId),
     });
     return quack ? mapPrismaQuackToDomain(quack) : null;
