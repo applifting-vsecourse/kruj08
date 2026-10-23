@@ -1,18 +1,22 @@
+import { createRef, type Ref } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
-import { QuackForm } from "@/features/quack/components/QuackForm"
+import { QuackForm, type QuackFormHandle } from "@/features/quack/components/QuackForm"
 
 // The mutation hook needs a query client; no request is ever sent here.
-const renderForm = (onDirtyChange?: (isDirty: boolean) => void) => {
+const renderForm = (onDirtyChange?: (isDirty: boolean) => void, ref?: Ref<QuackFormHandle>) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <QuackForm onDirtyChange={onDirtyChange} />
+      <QuackForm
+        ref={ref}
+        onDirtyChange={onDirtyChange}
+      />
     </QueryClientProvider>,
   )
 }
@@ -28,6 +32,17 @@ describe("QuackForm", () => {
 
     await userEvent.type(textField(), "Lunch?")
     expect(onDirtyChange).toHaveBeenLastCalledWith(true)
+  })
+
+  it("puts the cursor in the text field when asked from outside", async () => {
+    const ref = createRef<QuackFormHandle>()
+    renderForm(undefined, ref)
+    expect(textField()).not.toHaveFocus()
+
+    act(() => ref.current?.focus())
+
+    // react-hook-form focuses on the next tick, not synchronously
+    await waitFor(() => expect(textField()).toHaveFocus())
   })
 
   it("starts without a poll and opens two option fields on Add poll", async () => {

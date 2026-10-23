@@ -59,6 +59,47 @@ describe("QuackList", () => {
     expect(screen.queryByText("No quacks yet. Post the first one.")).not.toBeInTheDocument()
   })
 
+  it("invites an author with no quacks to write the first one", async () => {
+    const onWriteFirst = vi.fn()
+    render(
+      <QuackList
+        quacks={[]}
+        author="me"
+        onWriteFirst={onWriteFirst}
+      />,
+    )
+
+    expect(screen.getByText("You haven't quacked anything yet.")).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole("button", { name: "Write your first quack" }))
+    expect(onWriteFirst).toHaveBeenCalledOnce()
+  })
+
+  it("answers a search among my quacks without the invitation to write", () => {
+    render(
+      <QuackList
+        quacks={[]}
+        author="me"
+        search="goose"
+        onWriteFirst={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText("None of your quacks match “goose”.")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /write your first/i })).not.toBeInTheDocument()
+  })
+
+  it("does not invite anyone to write on the full feed", () => {
+    render(
+      <QuackList
+        quacks={[]}
+        onWriteFirst={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole("button", { name: /write your first/i })).not.toBeInTheDocument()
+  })
+
   it("shows an error with a working reload button", async () => {
     const onReload = vi.fn()
     render(
