@@ -27,7 +27,9 @@ export default defineConfig(({ mode }) => {
     // Vite 8 resolves tsconfig `paths` (the `@/` alias) natively.
     resolve: { tsconfigPaths: true },
     server: {
-      port: 3050,
+      // 3050 in the main checkout; a worktree gets its own slot via .env
+      // (see scripts/check-env.js) so two stacks can run side by side.
+      port: Number(env.VITE_PORT ?? 3050),
       // Fail loudly instead of silently moving to 3001, which the backend's
       // CORS allow-list would then reject with an opaque browser error.
       strictPort: true,

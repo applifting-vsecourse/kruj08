@@ -34,9 +34,19 @@ The CLI puts `shadow-xs`/`shadow-sm` on inputs, textareas and cards. [`DESIGN.md
 
 Assume the dev servers are up. If something is listening on the app's ports, that is this application: use it rather than starting a second instance. Restarting it (`pnpm dev`) is fine when the running code is stale.
 
-Tests and type-checks are the first line of evidence, not the last. **If a change touches the frontend, also verify it in the running app through the browser extension (Claude in Chrome) at `http://localhost:3050/`** — exercise the changed screen the way a user would, including the empty and error states, before calling the work done. Backend-only changes don't need the browser; the unit tests and a passing build are enough there.
+**Never assume the ports.** The app listens where `apps/backend/.env` says: `FRONTEND_URL` is the page to open, `BACKEND_URL` the API origin, `DB_HOST_PORT` the Postgres port. `pnpm env:check` prints all three. The main checkout uses 3050 / 4050 / 5433; a worktree gets its own slot (see below), and hitting 3050 from a worktree exercises the _other_ checkout's code.
 
-Before trusting what the browser shows, confirm the backend watcher actually picked up your edits: `curl -s http://localhost:4050/api/docs-json` must reflect the new endpoint or parameter, and the matching file under `apps/backend/dist-dev/` must be newer than your edit. The Nest watcher has been seen to miss files that an agent rewrote (the file gets a new inode and the per-file watch stays on the old one) while still reacting to files edited by hand. When that happens, the browser is exercising stale server code and a "it doesn't work" verdict is wrong — restart the dev servers rather than debugging the feature.
+Tests and type-checks are the first line of evidence, not the last. **If a change touches the frontend, also verify it in the running app through the browser extension (Claude in Chrome) at `FRONTEND_URL`** — exercise the changed screen the way a user would, including the empty and error states, before calling the work done. Backend-only changes don't need the browser; the unit tests and a passing build are enough there.
+
+Before trusting what the browser shows, confirm the backend watcher actually picked up your edits: `curl -s $BACKEND_URL/api/docs-json` must reflect the new endpoint or parameter, and the matching file under `apps/backend/dist-dev/` must be newer than your edit. The Nest watcher has been seen to miss files that an agent rewrote (the file gets a new inode and the per-file watch stays on the old one) while still reacting to files edited by hand. When that happens, the browser is exercising stale server code and a "it doesn't work" verdict is wrong — restart the dev servers rather than debugging the feature.
+
+### Working in a worktree
+
+A git worktree is a second checkout, so it needs its own `pnpm install` (the pnpm store makes it fast) and then runs the same `pnpm dev`. `scripts/check-env.js` notices it is in a worktree and writes `.env` files for a free **port slot**: slot _n_ is the main ports + 100·_n_ (3150 / 4150 / 5533 for the first worktree), plus a `COMPOSE_PROJECT_NAME` so the Postgres container, network and volume are separate from the main checkout's. Two stacks then run side by side with nothing shared. The slot is chosen once and read back from `.env` afterwards, so it is stable; delete both `.env` files to get a new one.
+
+Everything port-related is derived from those `.env` files — `PORT`, `BACKEND_URL` and `FRONTEND_URL` (CORS and BetterAuth trusted origins), `DATABASE_URL` and `DB_HOST_PORT` (compose mapping), `VITE_PORT` and `VITE_API_URL`. Change them together or not at all: the backend only accepts requests from the exact `FRONTEND_URL` origin, so a lone edit shows up as an opaque CORS error.
+
+Browser cookies are per host, not per port, so a login in one stack logs the other out when both are driven from the same browser profile. Use the built-in browser pane for one of them, or `127.0.0.1` for one and `localhost` for the other.
 
 ### Fix what the shadcn CLI generates
 
