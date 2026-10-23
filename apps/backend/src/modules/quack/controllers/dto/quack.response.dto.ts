@@ -91,14 +91,22 @@ export class QuackResponseDto {
   })
   poll!: PollDto | null;
 
+  @ApiProperty({
+    description:
+      'Whether the signed-in user may delete this quack: true only for its author. The admin role gets no exception.',
+  })
+  canDelete!: boolean;
+
   // `viewerId` is the signed-in user: it decides whether the poll's counts are
-  // visible to them (see PollDto.fromDomain).
+  // visible to them (see PollDto.fromDomain) and whether they may delete the
+  // quack. The client only displays both, it never works them out itself.
   static fromDomain(quack: Quack, viewerId: string): QuackResponseDto {
     if (!quack.user) {
       throw new Error(
         `QuackResponseDto.fromDomain expected quack.user to be loaded for quack ${quack.id}`,
       );
     }
+    const isAuthor = quack.userId === viewerId;
     return {
       id: quack.id,
       text: quack.text,
@@ -110,11 +118,8 @@ export class QuackResponseDto {
         name: quack.user.name,
         username: quack.user.username,
       },
-      poll: quack.poll
-        ? PollDto.fromDomain(quack.poll, {
-            isAuthor: quack.userId === viewerId,
-          })
-        : null,
+      poll: quack.poll ? PollDto.fromDomain(quack.poll, { isAuthor }) : null,
+      canDelete: isAuthor,
     };
   }
 }

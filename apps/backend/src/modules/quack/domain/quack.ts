@@ -60,6 +60,14 @@ export class QuackNotFoundError extends Error {
   }
 }
 
+// Only the author may delete a quack. Admins included: there is no bypass.
+export class QuackNotOwnedError extends Error {
+  constructor(quackId: string) {
+    super(`Quack ${quackId} belongs to someone else`);
+    this.name = 'QuackNotOwnedError';
+  }
+}
+
 export class QuackHasNoPollError extends Error {
   constructor(quackId: string) {
     super(`Quack ${quackId} has no poll`);

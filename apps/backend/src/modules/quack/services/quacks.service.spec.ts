@@ -6,6 +6,7 @@ import {
   Quack,
   QuackHasNoPollError,
   QuackNotFoundError,
+  QuackNotOwnedError,
 } from '@/modules/quack/domain/quack';
 import { QuackRepository } from '@/modules/quack/repositories/quack.repository';
 import { Identity } from '@/shared/auth/domain/identity';
@@ -36,6 +37,7 @@ const aPoll = (overrides: Partial<Poll> = {}): Poll => ({
 });
 
 const viewer = { id: 'u1' } as Identity;
+const admin = { id: 'admin1', role: 'admin' } as Identity;
 
 describe('QuacksService', () => {
   describe('getQuacks', () => {
@@ -166,6 +168,61 @@ describe('QuacksService', () => {
       expect(repository.createQuack).toHaveBeenCalledWith(
         expect.objectContaining({ pollOptions: ['Pizza', 'pizza'] }),
       );
+    });
+  });
+
+  describe('deleteQuack', () => {
+    it("deletes the signed-in user's own quack", async () => {
+      const repository = mock<QuackRepository>();
+      repository.softDeleteOwnQuack.mockResolvedValue(true);
+
+      const service = new QuacksService(repository);
+
+      await expect(service.deleteQuack(viewer, 'q1')).resolves.toBeUndefined();
+      // ownership is part of the write itself, keyed on the session's user
+      expect(repository.softDeleteOwnQuack).toHaveBeenCalledWith('q1', 'u1');
+      expect(repository.findQuackAuthorId).not.toHaveBeenCalled();
+    });
+
+    it("refuses to delete someone else's quack", async () => {
+      const repository = mock<QuackRepository>();
+      repository.softDeleteOwnQuack.mockResolvedValue(false);
+      repository.findQuackAuthorId.mockResolvedValue('someone-else');
+
+      const service = new QuacksService(repository);
+
+      await expect(service.deleteQuack(viewer, 'q1')).rejects.toBeInstanceOf(
+        QuackNotOwnedError,
+      );
+    });
+
+    it('refuses an admin too: the role is no bypass', async () => {
+      const repository = mock<QuackRepository>();
+      repository.softDeleteOwnQuack.mockResolvedValue(false);
+      repository.findQuackAuthorId.mockResolvedValue('u1');
+
+      const service = new QuacksService(repository);
+
+      await expect(service.deleteQuack(admin, 'q1')).rejects.toBeInstanceOf(
+        QuackNotOwnedError,
+      );
+      expect(repository.softDeleteOwnQuack).toHaveBeenCalledWith(
+        'q1',
+        'admin1',
+      );
+    });
+
+    it('reports a missing or already deleted quack as not found', async () => {
+      const repository = mock<QuackRepository>();
+      repository.softDeleteOwnQuack.mockResolvedValue(false);
+      // the repository skips deleted quacks, so both cases look the same here
+      repository.findQuackAuthorId.mockResolvedValue(null);
+
+      const service = new QuacksService(repository);
+
+      await expect(
+        service.deleteQuack(viewer, 'missing'),
+      ).rejects.toBeInstanceOf(QuackNotFoundError);
     });
   });
 
