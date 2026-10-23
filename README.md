@@ -31,6 +31,8 @@ pnpm dev
 
 The ports are deliberately odd — 3050, 4050, and Postgres on 5433 rather than the usual 3000, 4000 and 5432 — so the stack doesn't fight whatever else you have running. They're pinned rather than auto-incremented: the API only accepts requests from the frontend's exact origin, so a port that silently moved would surface as an unexplained CORS error.
 
+Need a second checkout running at the same time (a git worktree for a parallel branch)? Run `pnpm install` and `pnpm dev` there as usual: `scripts/check-env.js` detects the worktree and writes `.env` files for the next free port slot — 3150 / 4150 / 5533 for the first one — with its own Docker Compose project name, so the two stacks share nothing. `pnpm env:check` prints the URLs of whichever checkout you are in.
+
 ### Seeded users
 
 | Email                          | Password        |

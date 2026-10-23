@@ -1,3 +1,9 @@
+# Development database only — the backend and frontend run on the host.
+#
+# Compose reads `.env` next to this file, which is where a second checkout
+# (git worktree) gets its own host port and project name so two stacks can run
+# side by side. `scripts/check-env.js` writes both; see CLAUDE.md "Working in
+# a worktree". The main checkout keeps the defaults below.
 services:
   db:
     image: postgres:17-alpine
@@ -7,7 +13,7 @@ services:
       POSTGRES_PASSWORD: quacker
       POSTGRES_DB: quacker
     ports:
-      - 5433:5432
+      - ${DB_HOST_PORT:-5433}:5432
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U quacker -d quacker']
       interval: 3s
