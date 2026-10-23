@@ -27,6 +27,7 @@ const SAMPLE_QUACKS: Quack[] = [
     poll: null,
     // A preview, not the visitor's own post: no actions menu.
     canDelete: false,
+    deletionReasonRequired: false,
   },
   {
     id: "sample-2",
@@ -37,6 +38,7 @@ const SAMPLE_QUACKS: Quack[] = [
     user: { id: "sample-user-2", name: "Deep Duck Thoughts", username: "DeepDuckThoughts" },
     poll: null,
     canDelete: false,
+    deletionReasonRequired: false,
   },
 ]
 

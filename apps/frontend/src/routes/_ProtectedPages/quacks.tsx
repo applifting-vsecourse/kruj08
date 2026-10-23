@@ -39,9 +39,11 @@ function QuacksPage() {
   const navigate = Route.useNavigate()
   const formRef = useRef<QuackFormHandle>(null)
   const [searchInput, setSearchInput] = useState("")
-  // A half-written quack (or poll) is worth a warning before the user leaves.
-  // The form reports its dirty state; the route owns the guard, as Settings does.
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  // A half-written quack (or poll), or an admin's half-written reason for
+  // deleting one, is worth a warning before the user leaves. The form and the
+  // list report their dirty state; the route owns the guard, as Settings does.
+  const [hasUnsavedQuack, setHasUnsavedQuack] = useState(false)
+  const [hasUnsavedDeletionReason, setHasUnsavedDeletionReason] = useState(false)
   const search = normalizeQuackSearch(useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS))
   const quacksQuery = useQuery(quacksQueryOptions({ search, author }))
 
@@ -62,7 +64,7 @@ function QuacksPage() {
   return (
     <>
       <Seo title="Quacks" />
-      <UnsavedChangesGuard hasUnsavedChanges={hasUnsavedChanges} />
+      <UnsavedChangesGuard hasUnsavedChanges={hasUnsavedQuack || hasUnsavedDeletionReason} />
       <section className="mx-auto w-full max-w-2xl px-4 py-8">
         <h1 className="mb-4 text-2xl font-semibold tracking-tight">Quacks</h1>
 
@@ -72,7 +74,7 @@ function QuacksPage() {
           ref={formRef}
           className="mb-6"
           defaultMood={profile.defaultMood}
-          onDirtyChange={setHasUnsavedChanges}
+          onDirtyChange={setHasUnsavedQuack}
         />
 
         <Tabs
@@ -108,6 +110,7 @@ function QuacksPage() {
               // and refocusing the tab refetches it.
               onReload={() => void quacksQuery.refetch()}
               onWriteFirst={() => formRef.current?.focus()}
+              onDeletionDirtyChange={setHasUnsavedDeletionReason}
             />
           </TabsContent>
         </Tabs>

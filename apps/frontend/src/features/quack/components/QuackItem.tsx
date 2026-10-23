@@ -8,9 +8,13 @@ import { QuackPoll } from "@/features/quack/components/QuackPoll"
 import { UsersName } from "@/features/quack/components/UsersName"
 import { UsersUserName } from "@/features/quack/components/UsersUserName"
 
-type QuackItemProps = { quack: Quack }
+type QuackItemProps = {
+  quack: Quack
+  // Whether the delete dialog holds a reason that would be lost on navigation.
+  onDeletionDirtyChange?: (isDirty: boolean) => void
+}
 
-export function QuackItem({ quack }: QuackItemProps) {
+export function QuackItem({ quack, onDeletionDirtyChange }: QuackItemProps) {
   const { name, username } = quack.user
 
   const initials = name
@@ -61,6 +65,7 @@ export function QuackItem({ quack }: QuackItemProps) {
         <QuackActions
           quack={quack}
           className="self-start"
+          onDirtyChange={onDeletionDirtyChange}
         />
       ) : null}
     </article>
