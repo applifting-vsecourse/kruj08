@@ -4,6 +4,7 @@ import {
   POLL_OPTIONS_MAX,
   POLL_OPTIONS_MIN,
   Quack,
+  QuackAuthorFilter,
   QuackHasNoPollError,
   QuackMood,
   QuackNotFoundError,
@@ -51,12 +52,16 @@ export class QuacksService {
 
   async getQuacks(
     viewer: Identity,
-    filter: { search?: string } = {},
+    filter: { search?: string; author?: QuackAuthorFilter } = {},
   ): Promise<Quack[]> {
     // An empty or whitespace-only search is "no search", so the repository
     // sees one representation of the unfiltered feed.
     const search = filter.search?.trim();
-    const listFilter: QuackListFilter = search ? { search } : {};
+    const listFilter: QuackListFilter = {
+      ...(search ? { search } : {}),
+      // "me" is resolved from the session here; the client never sends an id.
+      ...(filter.author === 'me' ? { authorId: viewer.id } : {}),
+    };
     return this.quackRepository.getQuacks(listFilter, viewer.id);
   }
 

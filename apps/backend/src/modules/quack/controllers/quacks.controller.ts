@@ -54,7 +54,9 @@ export class QuacksController {
   constructor(private readonly quacksService: QuacksService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List quacks, optionally narrowed by a search' })
+  @ApiOperation({
+    summary: 'List quacks, optionally narrowed by a search or to your own',
+  })
   @ApiResponse({ status: 200, type: [QuackResponseDto] })
   @ApiResponse({ status: 400, description: 'Invalid query' })
   @ApiResponse({ status: 401, description: 'Not signed in' })
@@ -65,6 +67,7 @@ export class QuacksController {
     // The viewer decides whose vote shows up as `poll.myOptionId`.
     const quacks = await this.quacksService.getQuacks(user, {
       search: query.search,
+      author: query.author,
     });
     return quacks.map((quack) => QuackResponseDto.fromDomain(quack, user.id));
   }
