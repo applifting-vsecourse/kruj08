@@ -17,3 +17,9 @@ const required = (name: string): string => {
 
 export const FRONTEND_URL = required("FRONTEND_URL")
 export const API_URL = `${required("BACKEND_URL")}/api`
+
+// The admin the seed creates from the same two variables.
+export const SUPERADMIN = {
+  email: required("SUPERADMIN_EMAIL"),
+  password: required("SUPERADMIN_PASSWORD"),
+}

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 
-import { API_URL as API } from "./env"
+import { apiAs } from "./apiAs"
+import { API_URL as API, SUPERADMIN } from "./env"
 import { signIn } from "./signIn"
 
 async function findQuackNotBy(page: Page, username: string): Promise<{ id: string }> {
@@ -43,7 +44,8 @@ test("the Mine tab lists only your own quacks", async ({ page }) => {
   await expect(notMine).toHaveCount(0)
 })
 
-test("nobody can delete someone else's quack", async ({ page }) => {
+// An admin can (see below); everyone else can't.
+test("a regular user can't delete someone else's quack", async ({ page }) => {
   await signIn(page, "deepduckthoughts@example.com", "password2")
   await page.goto("/quacks")
 
@@ -56,4 +58,61 @@ test("nobody can delete someone else's quack", async ({ page }) => {
   const notMine = await findQuackNotBy(page, "DeepDuckThoughts")
   const response = await page.request.delete(`${API}/quacks/${notMine.id}`)
   expect(response.status()).toBe(403)
+})
+
+test("an admin deletes someone else's quack; everyone else still gets 403", async ({ page }) => {
+  // A quack of its own, so the test removes nothing the seed or another
+  // test relies on.
+  const text = `E2E quackery ${Date.now()}`
+  const author = await apiAs("migrationseason@example.com", "password4")
+  const bystander = await apiAs("deepduckthoughts@example.com", "password2")
+  try {
+    const posted = await author.post("quacks", { data: { text } })
+    expect(posted.status()).toBe(201)
+    const { id } = (await posted.json()) as { id: string }
+
+    // Someone who is neither its author nor an admin still can't, not even
+    // past the UI.
+    expect((await bystander.delete(`quacks/${id}`)).status()).toBe(403)
+
+    await signIn(page, SUPERADMIN.email, SUPERADMIN.password)
+    await page.goto("/quacks")
+    const quack = page.getByRole("article").filter({ hasText: text })
+    await quack.getByRole("button", { name: "Quack actions" }).click()
+    await page.getByRole("menuitem", { name: "Delete" }).click()
+
+    const dialog = page.getByRole("alertdialog")
+    // The dialog names whose quack it is, and won't go without a reason.
+    await expect(dialog).toContainText("The quack by Migration Season (@MigrationSeason)")
+    await dialog.getByRole("button", { name: "Delete" }).click()
+    await expect(dialog.getByText("Write why you're deleting this quack")).toBeVisible()
+
+    await dialog.getByLabel("Reason").fill("Sells quackery, won't take it down.")
+    await dialog.getByRole("button", { name: "Delete" }).click()
+    await expect(page.getByText("Quack deleted")).toBeVisible()
+    await expect(quack).toHaveCount(0)
+
+    // Gone for its author too, not just from the admin's screen.
+    const authorsFeed = (await (await author.get("quacks")).json()) as { id: string }[]
+    expect(authorsFeed.map((each) => each.id)).not.toContain(id)
+  } finally {
+    await author.dispose()
+    await bystander.dispose()
+  }
+})
+
+test("the admin sees Delete on every quack", async ({ page }) => {
+  await signIn(page, SUPERADMIN.email, SUPERADMIN.password)
+  await page.goto("/quacks")
+
+  const quacks = page.getByRole("article")
+  // Other people's quacks have to be there, or "every" proves nothing.
+  await expect(quacks.filter({ hasNotText: "@superadmin" }).first()).toBeVisible()
+
+  for (const quack of await quacks.all()) {
+    await quack.getByRole("button", { name: "Quack actions" }).click()
+    await expect(page.getByRole("menuitem", { name: "Delete" })).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(page.getByRole("menuitem")).toHaveCount(0)
+  }
 })
