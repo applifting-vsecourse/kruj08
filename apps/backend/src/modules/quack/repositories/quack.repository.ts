@@ -205,6 +205,21 @@ export class QuackRepository {
     );
   }
 
+  // An admin removing a quack. No author condition — that is the point — so
+  // nothing matching means the quack is gone. The service makes sure the
+  // caller is an admin and gave a reason.
+  async softDeleteAnyQuack(
+    id: string,
+    adminId: string,
+    reason: string,
+  ): Promise<boolean> {
+    return softDelete(
+      this.prisma,
+      { id },
+      { quackId: id, deletedById: adminId, reason },
+    );
+  }
+
   async createQuack(createQuackData: {
     text: string;
     mood: QuackMood | null;

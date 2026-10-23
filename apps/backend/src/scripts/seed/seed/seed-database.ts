@@ -29,7 +29,7 @@ export const seedDatabase = async (
   // Drop existing database data from all tables
   try {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "poll_vote", "poll_option", "poll", "quack", "session", "account", "verification", "user" RESTART IDENTITY CASCADE;',
+      'TRUNCATE TABLE "poll_vote", "poll_option", "poll", "quack_deletion", "quack", "session", "account", "verification", "user" RESTART IDENTITY CASCADE;',
     );
   } catch (error) {
     console.error('Error truncating tables:', error);
@@ -38,7 +38,7 @@ export const seedDatabase = async (
   console.log('Creating superadmin user');
 
   // Create a superadmin user. This should be delete in prod app
-  await createUser(prisma, auth, {
+  const superadmin = await createUser(prisma, auth, {
     email: config.superadminEmail,
     password: config.superadminPassword,
     name: 'Admin (Delete in Prod)',
@@ -98,9 +98,11 @@ export const seedDatabase = async (
     pollOptions?: string[];
     // Usernames of seeded users voting, in option order (index = option).
     votes?: User[][];
-    // Set for a quack its author has since deleted. It stays in the database
-    // with its poll and votes, and must show up nowhere in the app.
-    deletedMinutesAgo?: number;
+    // Set for a quack that has since been deleted, by its author or by an
+    // admin (who gives a reason). It stays in the database with its poll,
+    // votes and the record of who deleted it, and must show up nowhere in
+    // the app.
+    deleted?: { minutesAgo: number; by: User; reason?: string };
   }[] = [
     {
       author: pondAdmin,
@@ -132,7 +134,7 @@ send help or more caffeine`,
       // Deleted by its author. Search for "rye" to check it stays hidden.
       author: breadCritic,
       minutesAgo: 1720,
-      deletedMinutesAgo: 1700,
+      deleted: { minutesAgo: 1700, by: breadCritic },
       text: `Hot take: rye is the best bread for ducks. Fight me.`,
       pollOptions: ['Agreed', 'Absolutely not'],
       votes: [[caffeinatedDuck], [deepDuckThoughts, migrationSeason]],
@@ -177,6 +179,19 @@ The pond is not ready for this level of quality and, frankly, neither am I. 9/10
 Some of us would quite like to feel things.`,
     },
     {
+      // Removed by an admin, with a reason. Search for "duckweed" to check it
+      // stays hidden.
+      author: migrationSeason,
+      minutesAgo: 600,
+      text: `Duckweed tea cures molting in three days!!! Big Pond doesn't want you to know.
+DM me for the recipe, only 5 crumbs.`,
+      deleted: {
+        minutesAgo: 540,
+        by: superadmin,
+        reason: 'Sells duckweed tea as a cure for molting.',
+      },
+    },
+    {
       author: caffeinatedDuck,
       minutesAgo: 150,
       mood: 'happy',
@@ -212,7 +227,7 @@ Please stop tagging me.`,
     mood,
     pollOptions,
     votes,
-    deletedMinutesAgo,
+    deleted,
   } of exampleQuacks) {
     const quack = await createQuack(prisma, {
       text,
@@ -220,13 +235,13 @@ Please stop tagging me.`,
       pollOptions,
       userId: author.id,
       createdAt: new Date(now - minutesAgo * MINUTE_IN_MS),
-      deletion:
-        deletedMinutesAgo === undefined
-          ? undefined
-          : {
-              at: new Date(now - deletedMinutesAgo * MINUTE_IN_MS),
-              byUserId: author.id,
-            },
+      deletion: deleted
+        ? {
+            at: new Date(now - deleted.minutesAgo * MINUTE_IN_MS),
+            byUserId: deleted.by.id,
+            reason: deleted.reason,
+          }
+        : undefined,
     });
 
     if (quack.poll && votes) {

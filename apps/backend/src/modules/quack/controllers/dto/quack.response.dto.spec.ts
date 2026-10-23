@@ -20,20 +20,24 @@ const aQuackWithPoll = (myOptionId: string | null): Quack => ({
   },
 });
 
+const author = { id: 'author', role: 'user' };
+const viewer = { id: 'viewer', role: 'user' };
+const admin = { id: 'admin', role: 'admin' };
+
 describe('QuackResponseDto', () => {
   describe('poll.canSeeResults', () => {
     it('is false for someone else who has not voted', () => {
-      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), 'viewer');
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), viewer);
       expect(dto.poll?.canSeeResults).toBe(false);
     });
 
     it('is true for someone else once they have voted', () => {
-      const dto = QuackResponseDto.fromDomain(aQuackWithPoll('o1'), 'viewer');
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll('o1'), viewer);
       expect(dto.poll?.canSeeResults).toBe(true);
     });
 
     it('is true for the author even before they vote', () => {
-      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), 'author');
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), author);
       expect(dto.poll?.canSeeResults).toBe(true);
       // not voting is still reported as such, so the UI highlights nothing
       expect(dto.poll?.myOptionId).toBeNull();
@@ -42,25 +46,51 @@ describe('QuackResponseDto', () => {
 
   describe('canDelete', () => {
     it('is true for the author', () => {
-      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), 'author');
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), author);
       expect(dto.canDelete).toBe(true);
     });
 
     it('is false for anyone else', () => {
-      const dto = QuackResponseDto.fromDomain(aQuackWithPoll('o1'), 'viewer');
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll('o1'), viewer);
       expect(dto.canDelete).toBe(false);
+    });
+
+    it("is true for an admin on someone else's quack", () => {
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), admin);
+      expect(dto.canDelete).toBe(true);
+    });
+  });
+
+  describe('deletionReasonRequired', () => {
+    it('is false for the author', () => {
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), author);
+      expect(dto.deletionReasonRequired).toBe(false);
+    });
+
+    it("is true for an admin on someone else's quack", () => {
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), admin);
+      expect(dto.deletionReasonRequired).toBe(true);
+    });
+
+    it('is true for an admin on their own quack too', () => {
+      const dto = QuackResponseDto.fromDomain(
+        { ...aQuackWithPoll(null), userId: 'admin' },
+        admin,
+      );
+      expect(dto.canDelete).toBe(true);
+      expect(dto.deletionReasonRequired).toBe(true);
     });
   });
 
   it('keeps the poll id out of the response', () => {
-    const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), 'viewer');
+    const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), viewer);
     expect(dto.poll).not.toHaveProperty('id');
   });
 
   it('maps a plain quack with poll null', () => {
     const dto = QuackResponseDto.fromDomain(
       { ...aQuackWithPoll(null), poll: null },
-      'viewer',
+      viewer,
     );
     expect(dto.poll).toBeNull();
   });

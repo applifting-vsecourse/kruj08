@@ -1,4 +1,5 @@
 import {
+  canModerateQuacks,
   Poll,
   Quack,
   QUACK_MOODS,
@@ -93,20 +94,31 @@ export class QuackResponseDto {
 
   @ApiProperty({
     description:
-      'Whether the signed-in user may delete this quack: true only for its author. The admin role gets no exception.',
+      'Whether the signed-in user may delete this quack: true for its author, and for an admin on every quack.',
   })
   canDelete!: boolean;
 
-  // `viewerId` is the signed-in user: it decides whether the poll's counts are
-  // visible to them (see PollDto.fromDomain) and whether they may delete the
-  // quack. The client only displays both, it never works them out itself.
-  static fromDomain(quack: Quack, viewerId: string): QuackResponseDto {
+  @ApiProperty({
+    description:
+      'Whether deleting this quack asks the signed-in user for a reason: true for an admin, on every quack including their own.',
+  })
+  deletionReasonRequired!: boolean;
+
+  // `viewer` is the signed-in user: it decides whether the poll's counts are
+  // visible to them (see PollDto.fromDomain), whether they may delete the
+  // quack and whether that needs a reason. The client only displays these, it
+  // never works them out itself.
+  static fromDomain(
+    quack: Quack,
+    viewer: { id: string; role: string },
+  ): QuackResponseDto {
     if (!quack.user) {
       throw new Error(
         `QuackResponseDto.fromDomain expected quack.user to be loaded for quack ${quack.id}`,
       );
     }
-    const isAuthor = quack.userId === viewerId;
+    const isAuthor = quack.userId === viewer.id;
+    const isModerator = canModerateQuacks(viewer.role);
     return {
       id: quack.id,
       text: quack.text,
@@ -119,7 +131,8 @@ export class QuackResponseDto {
         username: quack.user.username,
       },
       poll: quack.poll ? PollDto.fromDomain(quack.poll, { isAuthor }) : null,
-      canDelete: isAuthor,
+      canDelete: isAuthor || isModerator,
+      deletionReasonRequired: isModerator,
     };
   }
 }
