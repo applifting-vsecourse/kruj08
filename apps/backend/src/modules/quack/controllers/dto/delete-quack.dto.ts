@@ -1,7 +1,8 @@
 import { DELETION_REASON_MAX_LENGTH } from '@/modules/quack/domain/quack';
+import { MaxCharacters } from '@/shared/validation/max-characters.decorator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class DeleteQuackDto {
   @ApiPropertyOptional({
@@ -17,6 +18,8 @@ export class DeleteQuackDto {
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
   )
-  @MaxLength(DELETION_REASON_MAX_LENGTH)
+  // Counted like the VARCHAR(500) column it is stored in, so a reason that
+  // passes here always fits there.
+  @MaxCharacters(DELETION_REASON_MAX_LENGTH)
   reason?: string;
 }

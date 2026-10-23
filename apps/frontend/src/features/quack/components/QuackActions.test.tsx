@@ -266,6 +266,21 @@ describe("QuackActions", () => {
       expect(deleteQuackMock).not.toHaveBeenCalled()
     })
 
+    it("counts an emoji as one character, as the server does", async () => {
+      const user = userEvent.setup()
+      deleteQuackMock.mockResolvedValue()
+      renderList([moderated])
+
+      const dialog = await openDeleteDialog(user)
+      // 500 characters, but 1000 UTF-16 units in a JS string
+      const reason = "🦆".repeat(500)
+      await user.click(within(dialog).getByLabelText("Reason"))
+      await user.paste(reason)
+      await user.click(within(dialog).getByRole("button", { name: "Delete" }))
+
+      expect(deleteQuackMock).toHaveBeenCalledWith({ quackId: "q1", reason }, expect.anything())
+    })
+
     it("sends the trimmed reason with the deletion", async () => {
       const user = userEvent.setup()
       deleteQuackMock.mockResolvedValue()

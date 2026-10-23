@@ -13,7 +13,9 @@ export const POLL_OPTIONS_MIN = 2;
 export const POLL_OPTIONS_MAX = 4;
 export const POLL_OPTION_MAX_LENGTH = 50;
 
-// The longest reason for deleting a quack. Mirrored in the frontend dialog.
+// The longest reason for deleting a quack, in characters as Postgres counts
+// them (code points), since it is stored in a VARCHAR(500). Mirrored in the
+// frontend dialog.
 export const DELETION_REASON_MAX_LENGTH = 500;
 
 // The roles that moderate the feed: they may delete any quack, and have to
