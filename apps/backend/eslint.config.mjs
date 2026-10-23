@@ -91,11 +91,13 @@ export default tseslint.config(
     // A deleted quack stays in the table (soft delete), and QuackRepository is
     // the one place that hides it from every read (`notDeleted`). Querying
     // quacks anywhere else, directly or through a relation of another model,
-    // would quietly bring deleted ones back. The seed writes quacks on purpose.
+    // would quietly bring deleted ones back. The seed writes quacks on purpose,
+    // and the repository's database test reads rows as stored, deleted or not.
     files: ["src/**/*.ts"],
     ignores: [
       "src/modules/quack/repositories/quack.repository.ts",
       "src/modules/quack/repositories/quack.repository.spec.ts",
+      "src/modules/quack/repositories/quack.repository.db-spec.ts",
       "src/scripts/seed/**",
     ],
     rules: {
