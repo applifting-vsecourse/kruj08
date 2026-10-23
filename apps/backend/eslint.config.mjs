@@ -3,6 +3,28 @@ import eslintConfigPrettier from "eslint-config-prettier"
 import globals from "globals"
 import tseslint from "typescript-eslint"
 
+// Every operation on a Prisma model delegate, so `x.quack.<op>` can be told
+// apart from a domain object that merely has a `quack` field.
+const PRISMA_OPERATIONS = [
+  "findMany",
+  "findFirst",
+  "findFirstOrThrow",
+  "findUnique",
+  "findUniqueOrThrow",
+  "count",
+  "aggregate",
+  "groupBy",
+  "create",
+  "createMany",
+  "createManyAndReturn",
+  "update",
+  "updateMany",
+  "updateManyAndReturn",
+  "upsert",
+  "delete",
+  "deleteMany",
+].join("|")
+
 export default tseslint.config(
   { ignores: ["dist/**", "coverage/**", "node_modules/**", "prisma/**", "src/generated/**"] },
   js.configs.recommended,
@@ -61,6 +83,34 @@ export default tseslint.config(
                 "Use the `@/` alias instead of climbing out of the folder with `../`. Relative imports are fine for siblings (`./`).",
             },
           ],
+        },
+      ],
+    },
+  },
+  {
+    // A deleted quack stays in the table (soft delete), and QuackRepository is
+    // the one place that hides it from every read (`notDeleted`). Querying
+    // quacks anywhere else, directly or through a relation of another model,
+    // would quietly bring deleted ones back. The seed writes quacks on purpose.
+    files: ["src/**/*.ts"],
+    ignores: [
+      "src/modules/quack/repositories/quack.repository.ts",
+      "src/modules/quack/repositories/quack.repository.spec.ts",
+      "src/scripts/seed/**",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: `MemberExpression[property.name=/^(${PRISMA_OPERATIONS})$/] > MemberExpression.object[property.name="quack"]`,
+          message:
+            "Query quacks only in QuackRepository (src/modules/quack/repositories/quack.repository.ts): it is the one place that hides deleted quacks. Add a repository method there instead.",
+        },
+        {
+          selector:
+            "Property[key.name=/^(include|select|where|orderBy)$/] Property[key.name=/^quacks?$/]",
+          message:
+            "Don't reach quacks through a relation of another model: it skips the filter that hides deleted quacks. Ask QuackRepository for them instead.",
         },
       ],
     },

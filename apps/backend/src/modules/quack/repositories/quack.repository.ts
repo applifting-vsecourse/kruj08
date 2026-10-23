@@ -96,7 +96,8 @@ export type QuackListFilter = {
 
 // The one place that decides a deleted quack does not exist. Every read in
 // this repository wraps its `where` in it, and quack.repository.spec.ts fails
-// for a new method until it is checked against a deleted quack too.
+// for a new method until it is checked against a deleted quack too. ESLint
+// (no-restricted-syntax) keeps quack queries out of every other file.
 const notDeleted = <Where extends Prisma.QuackWhereInput>(
   where: Where,
 ): Where & { deletedAt: null } => ({ ...where, deletedAt: null });
