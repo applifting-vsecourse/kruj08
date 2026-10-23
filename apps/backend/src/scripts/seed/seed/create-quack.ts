@@ -12,6 +12,9 @@ type CreateQuackParams = {
   // Optional so the seed shows both plain posts and posts with a poll. The
   // quack's text is the question.
   pollOptions?: string[];
+  // Optional so the seed has a quack its author deleted: the row is there,
+  // the feed and search must not show it.
+  deletedAt?: Date;
 };
 
 export type SeededQuack = {
@@ -25,13 +28,14 @@ export async function createQuack(
   prisma: PrismaService,
   params: CreateQuackParams,
 ): Promise<SeededQuack> {
-  const { text, userId, mood, createdAt, pollOptions } = params;
+  const { text, userId, mood, createdAt, pollOptions, deletedAt } = params;
 
   const quack = await prisma.quack.create({
     data: {
       text,
       mood,
       createdAt,
+      deletedAt,
       user: {
         connect: {
           id: userId,

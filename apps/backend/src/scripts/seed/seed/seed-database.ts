@@ -88,8 +88,8 @@ export const seedDatabase = async (
   // Listed oldest first. The feed sorts newest first, so the last entry here is
   // the one at the top of the screen.
   // Some quacks carry a mood and some do not, so the feed shows both cases.
-  // One carries a poll, with votes cast below, so the feed shows result bars
-  // without anyone having to vote first.
+  // One visible quack carries a poll, with votes cast below, so the feed shows
+  // result bars without anyone having to vote first.
   const exampleQuacks: {
     author: User;
     minutesAgo: number;
@@ -98,6 +98,9 @@ export const seedDatabase = async (
     pollOptions?: string[];
     // Usernames of seeded users voting, in option order (index = option).
     votes?: User[][];
+    // Set for a quack its author has since deleted. It stays in the database
+    // with its poll and votes, and must show up nowhere in the app.
+    deletedMinutesAgo?: number;
   }[] = [
     {
       author: pondAdmin,
@@ -124,6 +127,15 @@ Crust: excellent. Delivery: amateur. 6/10.`,
       text: `just spilled coffee on my keyboard
 now every time i type "duck" it autocorrects to "quack"
 send help or more caffeine`,
+    },
+    {
+      // Deleted by its author. Search for "rye" to check it stays hidden.
+      author: breadCritic,
+      minutesAgo: 1720,
+      deletedMinutesAgo: 1700,
+      text: `Hot take: rye is the best bread for ducks. Fight me.`,
+      pollOptions: ['Agreed', 'Absolutely not'],
+      votes: [[caffeinatedDuck], [deepDuckThoughts, migrationSeason]],
     },
     {
       author: deepDuckThoughts,
@@ -200,6 +212,7 @@ Please stop tagging me.`,
     mood,
     pollOptions,
     votes,
+    deletedMinutesAgo,
   } of exampleQuacks) {
     const quack = await createQuack(prisma, {
       text,
@@ -207,6 +220,10 @@ Please stop tagging me.`,
       pollOptions,
       userId: author.id,
       createdAt: new Date(now - minutesAgo * MINUTE_IN_MS),
+      deletedAt:
+        deletedMinutesAgo === undefined
+          ? undefined
+          : new Date(now - deletedMinutesAgo * MINUTE_IN_MS),
     });
 
     if (quack.poll && votes) {

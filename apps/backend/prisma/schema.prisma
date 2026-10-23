@@ -39,10 +39,15 @@ model Quack {
   userId    String
   createdAt DateTime   @default(now())
   updatedAt DateTime   @default(now()) @updatedAt
+  // Set when the author deletes the quack. The row stays, and so do its poll
+  // and votes, because no cascade fires; QuackRepository skips it on every read.
+  deletedAt DateTime?
   // A quack without a poll is a plain post — the common case.
   poll      Poll?
 
   @@index([userId])
+  // The feed: quacks that are not deleted, newest first.
+  @@index([deletedAt, createdAt(sort: Desc)])
   @@map("quack")
 }
 
