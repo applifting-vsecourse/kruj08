@@ -19,7 +19,8 @@ type QuackListProps = {
   // has posted nothing yet.
   onWriteFirst?: () => void
   // Whether a delete dialog in the list holds a reason that would be lost on
-  // navigation. Dialogs are modal, so at most one is open at a time.
+  // navigation. Only that dialog reports, and dialogs are modal, so one flag
+  // is enough.
   onDeletionDirtyChange?: (isDirty: boolean) => void
 }
 

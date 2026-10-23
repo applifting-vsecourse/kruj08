@@ -53,15 +53,18 @@ const renderList = (quacks: Quack[], onDeletionDirtyChange?: (isDirty: boolean) 
   // The feed and a search, as the quacks page would have cached them.
   queryClient.setQueryData(quackKeys.list({}), quacks)
   queryClient.setQueryData(quackKeys.list({ search: "quack" }), quacks)
-  render(
+  const list = (shown: Quack[]) => (
     <QueryClientProvider client={queryClient}>
       <QuackList
-        quacks={quacks}
+        quacks={shown}
         onDeletionDirtyChange={onDeletionDirtyChange}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
-  return { queryClient }
+  const { rerender } = render(list(quacks))
+  // What a refetch does to the list on screen: same component, other quacks.
+  const showQuacks = (shown: Quack[]) => rerender(list(shown))
+  return { queryClient, showQuacks }
 }
 
 const openDeleteDialog = async (user: ReturnType<typeof userEvent.setup>) => {
@@ -357,6 +360,46 @@ describe("QuackActions", () => {
       await user.click(within(discard).getByRole("button", { name: "Discard reason" }))
 
       await waitFor(() => expect(onDeletionDirtyChange).toHaveBeenLastCalledWith(false))
+    })
+
+    it("keeps the page guarded while other quacks arrive and leave", async () => {
+      // A refetch (e.g. on refocusing the tab) changes the list under an open
+      // dialog. An admin has the menu on every quack, so the newcomers mount
+      // their own, and those must not clear the guard the open one relies on.
+      const user = userEvent.setup()
+      const onDeletionDirtyChange = vi.fn()
+      const { showQuacks } = renderList([moderated], onDeletionDirtyChange)
+      const newcomer = quack({
+        id: "q3",
+        text: "Fresh from the pond",
+        userId: "third",
+        user: { id: "third", name: "Bread Critic", username: "BreadCritic" },
+        deletionReasonRequired: true,
+      })
+
+      const dialog = await openDeleteDialog(user)
+      await user.type(within(dialog).getByLabelText("Reason"), "Quack medicine")
+      expect(onDeletionDirtyChange).toHaveBeenLastCalledWith(true)
+
+      showQuacks([newcomer, moderated])
+      expect(onDeletionDirtyChange).toHaveBeenLastCalledWith(true)
+
+      showQuacks([moderated])
+      expect(onDeletionDirtyChange).toHaveBeenLastCalledWith(true)
+      expect(within(dialog).getByLabelText("Reason")).toHaveValue("Quack medicine")
+    })
+
+    it("lifts the guard when the quack with the unsaved reason leaves the list", async () => {
+      // e.g. its author deleted it in the meantime: its dialog goes with it
+      const user = userEvent.setup()
+      const onDeletionDirtyChange = vi.fn()
+      const { showQuacks } = renderList([moderated], onDeletionDirtyChange)
+
+      const dialog = await openDeleteDialog(user)
+      await user.type(within(dialog).getByLabelText("Reason"), "Quack medicine")
+      showQuacks([])
+
+      expect(onDeletionDirtyChange).toHaveBeenLastCalledWith(false)
     })
   })
 })

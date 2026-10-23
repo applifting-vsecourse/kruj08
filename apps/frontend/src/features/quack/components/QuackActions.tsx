@@ -79,12 +79,15 @@ export function QuackActions({ quack, className, onDirtyChange }: QuackActionsPr
   })
 
   const { isDirty } = form.formState
+  // Only the dialog holding a reason reports, and it takes the report back
+  // once the reason is gone: sent, discarded, or unmounted along with a quack
+  // that left the list. Every other quack's menu stays silent, so newcomers
+  // and leavers on a refetch can't clear the guard this one relies on.
   useEffect(() => {
-    onDirtyChange?.(isDirty)
+    if (!isDirty) return
+    onDirtyChange?.(true)
+    return () => onDirtyChange?.(false)
   }, [isDirty, onDirtyChange])
-  // A quack that leaves the list takes its dialog along, and must not leave
-  // the page guarded behind it.
-  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
 
   const openConfirm = () => {
     // A failure or a discarded reason from an earlier attempt shouldn't greet
