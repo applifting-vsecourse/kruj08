@@ -1,6 +1,7 @@
 import {
   DeletionReasonRequiredError,
   InvalidPollError,
+  NotAModeratorError,
   PollOptionNotFoundError,
   QuackHasNoPollError,
   QuackNotFoundError,
@@ -176,7 +177,10 @@ export class QuacksController {
       if (error instanceof QuackNotFoundError) {
         throw new NotFoundException(error.message);
       }
-      if (error instanceof QuackNotOwnedError) {
+      if (
+        error instanceof QuackNotOwnedError ||
+        error instanceof NotAModeratorError
+      ) {
         throw new ForbiddenException(error.message);
       }
       throw error;

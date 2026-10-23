@@ -16,9 +16,15 @@ export const POLL_OPTION_MAX_LENGTH = 50;
 // The longest reason for deleting a quack. Mirrored in the frontend dialog.
 export const DELETION_REASON_MAX_LENGTH = 500;
 
-// Admins moderate the feed: they may delete any quack, and have to say why
-// every time, their own quacks included. Everyone else deletes only their own.
-export const canModerateQuacks = (role: string): boolean => role === 'admin';
+// The roles that moderate the feed: they may delete any quack, and have to
+// say why every time, their own quacks included. Everyone else deletes only
+// their own. The repository checks the role against the database inside the
+// delete itself; the session's copy only decides what the client is offered
+// and which path the service takes.
+export const MODERATOR_ROLES: readonly string[] = ['admin'];
+
+export const canModerateQuacks = (role: string): boolean =>
+  MODERATOR_ROLES.includes(role);
 
 export type QuackAuthor = {
   id: string;
@@ -78,6 +84,15 @@ export class QuackNotOwnedError extends Error {
   constructor(quackId: string) {
     super(`Quack ${quackId} belongs to someone else`);
     this.name = 'QuackNotOwnedError';
+  }
+}
+
+// Someone deleted a quack as a moderator whom the database does not count as
+// one (any more): the role in their session was out of date.
+export class NotAModeratorError extends Error {
+  constructor(userId: string) {
+    super(`User ${userId} may not delete other people's quacks`);
+    this.name = 'NotAModeratorError';
   }
 }
 
