@@ -25,6 +25,8 @@ const SAMPLE_QUACKS: Quack[] = [
     createdAt: new Date("2026-09-22T09:12:00"),
     user: { id: "sample-user-1", name: "Caffeinated Duck", username: "CaffeinatedDuck" },
     poll: null,
+    // A preview, not the visitor's own post: no actions menu.
+    canDelete: false,
   },
   {
     id: "sample-2",
@@ -34,6 +36,7 @@ const SAMPLE_QUACKS: Quack[] = [
     createdAt: new Date("2026-09-22T08:40:00"),
     user: { id: "sample-user-2", name: "Deep Duck Thoughts", username: "DeepDuckThoughts" },
     poll: null,
+    canDelete: false,
   },
 ]
 

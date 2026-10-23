@@ -45,4 +45,8 @@ export const api = ky.create({
   },
 })
 
+// The API answered 404: what the request addressed is not there, or no longer.
+export const isNotFoundError = (error: unknown): boolean =>
+  error instanceof HTTPError && error.response.status === 404
+
 export { HTTPError }
