@@ -62,8 +62,13 @@ model QuackDeletion {
   quack       Quack    @relation(fields: [quackId], references: [id], onDelete: Cascade)
   quackId     String   @id
   // The author for their own quack, otherwise the admin who removed it.
-  deletedBy   User     @relation(fields: [deletedById], references: [id], onDelete: Cascade)
-  deletedById String
+  // Always set when the row is written. It turns null only when that user's
+  // account is deleted later: the record of why and when stays, which a
+  // cascade would wipe. (Restrict can't work here: it fires before the
+  // cascade through Quack removes an author's record of their own quacks,
+  // so an author who ever deleted one could never be deleted.)
+  deletedBy   User?    @relation(fields: [deletedById], references: [id], onDelete: SetNull)
+  deletedById String?
   // Required from an admin, absent when an author deletes their own quack.
   // Shown to nobody in the app for now.
   reason      String?  @db.VarChar(500)
