@@ -130,6 +130,31 @@ const buildWhere = (filter: QuackListFilter): Prisma.QuackWhereInput => ({
   ...(filter.search ? searchWhere(filter.search) : {}),
 });
 
+// Marks the quack deleted and writes the record of who did it, in one
+// transaction. The update's `where` alone decides whether there is anything
+// to delete, so no request can slip in between a check and the write. Of two
+// concurrent deletions the second waits on the row, then matches nothing:
+// the record that stays is the first one's.
+const softDelete = (
+  prisma: PrismaService,
+  where: Prisma.QuackWhereInput,
+  deletion: { quackId: string; deletedById: string; reason: string | null },
+): Promise<boolean> =>
+  prisma.$transaction(async (tx) => {
+    const deletedAt = new Date();
+    const { count } = await tx.quack.updateMany({
+      where: notDeleted(where),
+      data: { deletedAt },
+    });
+    if (count === 0) {
+      return false;
+    }
+    await tx.quackDeletion.create({
+      data: { ...deletion, createdAt: deletedAt },
+    });
+    return true;
+  });
+
 /**
  * If you decide to choose a different ORM or database, you should only need to change the repository files methods implementation.
  * Inject what you need instead of PrismaService and re-implement the methods and model mapping.
@@ -169,15 +194,15 @@ export class QuackRepository {
     return quack?.userId ?? null;
   }
 
-  // Ownership check and write in one statement: the row is only touched when
-  // it is still there and belongs to `userId`, so no request can slip in
-  // between a check and the update. Returns whether anything was deleted.
+  // The ownership check is part of the write: the row is only touched when it
+  // is still there and belongs to `userId`. Returns whether anything was
+  // deleted.
   async softDeleteOwnQuack(id: string, userId: string): Promise<boolean> {
-    const { count } = await this.prisma.quack.updateMany({
-      where: notDeleted({ id, userId }),
-      data: { deletedAt: new Date() },
-    });
-    return count > 0;
+    return softDelete(
+      this.prisma,
+      { id, userId },
+      { quackId: id, deletedById: userId, reason: null },
+    );
   }
 
   async createQuack(createQuackData: {
