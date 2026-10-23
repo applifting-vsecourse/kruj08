@@ -15,6 +15,7 @@ const quackJson = {
   user: { id: "u2", name: "Deep Duck", username: "DeepDuckThoughts" },
   poll: null,
   canDelete: false,
+  deletionReasonRequired: false,
 }
 
 // The first request answers with someone else's quack; every later one hangs,

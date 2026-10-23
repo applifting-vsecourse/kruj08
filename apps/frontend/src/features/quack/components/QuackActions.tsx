@@ -1,9 +1,13 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { Ellipsis, Loader2, Trash2 } from "lucide-react"
+import { useForm } from "react-hook-form"
 import { toast } from "sonner"
+import { z } from "zod"
 
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -18,26 +22,75 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import { Textarea } from "@/components/ui/textarea"
 
 import type { Quack } from "@/features/quack/api/quackSchemas"
 import { useDeleteQuack } from "@/features/quack/hooks/useDeleteQuack"
 import { formatVoteCount } from "@/features/quack/lib/poll"
 
+// Mirrors DELETION_REASON_MAX_LENGTH on the server, which checks it again.
+const REASON_MAX_LENGTH = 500
+
+// The reason is checked only where the server asks for one (an admin). For
+// everyone else the field is not on screen and anything goes.
+const deletionSchema = (isReasonRequired: boolean) =>
+  z.object({
+    reason: isReasonRequired
+      ? z
+          .string()
+          .trim()
+          .min(1, "Write why you're deleting this quack")
+          .max(REASON_MAX_LENGTH, `Keep it under ${REASON_MAX_LENGTH} characters`)
+      : z.string(),
+  })
+
+type DeletionValues = { reason: string }
+
 type QuackActionsProps = {
   quack: Quack
   className?: string
+  // Reports whether the dialog holds a reason that would be lost on
+  // navigation. The route turns it into a guard, as it does for the form.
+  onDirtyChange?: (isDirty: boolean) => void
 }
 
 // The "⋯" menu on a quack and the confirmation behind its Delete item.
-// QuackItem renders it only when the server says `canDelete`.
-export function QuackActions({ quack, className }: QuackActionsProps) {
+// QuackItem renders it only when the server says `canDelete`. When the server
+// also says `deletionReasonRequired` (an admin), the confirmation asks why.
+export function QuackActions({ quack, className, onDirtyChange }: QuackActionsProps) {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  const [isDiscardOpen, setIsDiscardOpen] = useState(false)
   const deleteQuack = useDeleteQuack()
   const votes = quack.poll?.totalVotes ?? 0
+  const isReasonRequired = quack.deletionReasonRequired
+
+  const form = useForm<DeletionValues>({
+    resolver: zodResolver(deletionSchema(isReasonRequired)),
+    defaultValues: { reason: "" },
+  })
+
+  const { isDirty } = form.formState
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
+  // A quack that leaves the list takes its dialog along, and must not leave
+  // the page guarded behind it.
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange])
 
   const openConfirm = () => {
-    // A failure from an earlier attempt shouldn't greet the next one.
+    // A failure or a discarded reason from an earlier attempt shouldn't greet
+    // the next one.
     deleteQuack.reset()
+    form.reset()
     setIsConfirmOpen(true)
   }
 
@@ -45,22 +98,37 @@ export function QuackActions({ quack, className }: QuackActionsProps) {
     // A request in flight cannot be called back, so neither Cancel nor Escape
     // pretends it can.
     if (deleteQuack.isPending) return
+    // A half-written reason is worth a question before it is thrown away.
+    if (!isOpen && isDirty) {
+      setIsDiscardOpen(true)
+      return
+    }
     setIsConfirmOpen(isOpen)
   }
 
-  const handleDelete = async () => {
+  const discardReason = () => {
+    form.reset()
+    setIsConfirmOpen(false)
+  }
+
+  const handleDelete = form.handleSubmit(async ({ reason }) => {
     try {
       // mutateAsync rather than mutate(…, { onSuccess }): on success the quack
       // leaves the cache and this component unmounts, and per-call callbacks
       // never run for an unmounted component. The awaited code below still does.
-      await deleteQuack.mutateAsync(quack.id)
+      await deleteQuack.mutateAsync({
+        quackId: quack.id,
+        reason: isReasonRequired ? reason : undefined,
+      })
     } catch {
-      // The dialog stays open and shows the error from the mutation state.
+      // The dialog stays open, with the reason as typed, and shows the error
+      // from the mutation state.
       return
     }
+    form.reset()
     setIsConfirmOpen(false)
     toast.success("Quack deleted")
-  }
+  })
 
   return (
     <>
@@ -89,12 +157,29 @@ export function QuackActions({ quack, className }: QuackActionsProps) {
         open={isConfirmOpen}
         onOpenChange={handleOpenChange}
       >
-        <AlertDialogContent>
+        <AlertDialogContent
+          // An admin's next step is writing the reason, so the cursor starts
+          // there instead of on Cancel.
+          onOpenAutoFocus={(event) => {
+            if (!isReasonRequired) return
+            event.preventDefault()
+            form.setFocus("reason")
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Delete quack?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="flex flex-col gap-2">
-                <p>The quack will disappear from the feed for everyone.</p>
+                {/* An admin may be deleting someone else's words, so the
+                    dialog names whose. */}
+                {isReasonRequired ? (
+                  <p>
+                    The quack by {quack.user.name} (@{quack.user.username}) will disappear from the
+                    feed for everyone, its author included. This can&apos;t be undone.
+                  </p>
+                ) : (
+                  <p>The quack will disappear from the feed for everyone.</p>
+                )}
                 {/* Votes are other people's answers, so losing them is worth
                     a sentence. A poll nobody answered loses nothing. */}
                 {votes > 0 ? (
@@ -107,34 +192,93 @@ export function QuackActions({ quack, className }: QuackActionsProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          {deleteQuack.isError ? (
-            <p
-              role="alert"
-              className="text-sm text-destructive"
+          <Form {...form}>
+            <form
+              noValidate
+              onSubmit={(event) => void handleDelete(event)}
+              className="grid gap-4"
             >
-              Couldn&apos;t delete the quack. Try again.
-            </p>
-          ) : null}
+              {isReasonRequired ? (
+                <FormField
+                  control={form.control}
+                  name="reason"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reason</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          rows={3}
+                          placeholder="Sells duckweed tea as a cure for molting."
+                          disabled={deleteQuack.isPending}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Kept on record only. Nobody sees it, and the author isn&apos;t told.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
 
+              {deleteQuack.isError ? (
+                <p
+                  role="alert"
+                  className="text-sm text-destructive"
+                >
+                  Couldn&apos;t delete the quack. Try again.
+                </p>
+              ) : null}
+
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleteQuack.isPending}>Cancel</AlertDialogCancel>
+                {/* A plain submit button, not AlertDialogAction: that one
+                    closes the dialog on click, and this one has to stay open
+                    until the reason checks out and the server answers. */}
+                <Button
+                  type="submit"
+                  variant="destructive"
+                  disabled={deleteQuack.isPending}
+                >
+                  {deleteQuack.isPending ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      Deleting…
+                    </>
+                  ) : (
+                    "Delete"
+                  )}
+                </Button>
+              </AlertDialogFooter>
+            </form>
+          </Form>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Stacks on top of the confirmation; Escape and "Keep writing" close
+          only this one and leave the reason where it was. */}
+      <AlertDialog
+        open={isDiscardOpen}
+        onOpenChange={setIsDiscardOpen}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard the reason?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You&apos;ve started writing why this quack should go. If you close now, the reason is
+              lost and the quack stays.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleteQuack.isPending}>Cancel</AlertDialogCancel>
-            {/* A plain button, not AlertDialogAction: that one closes the
-                dialog on click, and this one has to stay open until the server
-                answers. */}
-            <Button
+            <AlertDialogCancel>Keep writing</AlertDialogCancel>
+            {/* Losing work is destructive, so the button says so. */}
+            <AlertDialogAction
               variant="destructive"
-              disabled={deleteQuack.isPending}
-              onClick={() => void handleDelete()}
+              onClick={discardReason}
             >
-              {deleteQuack.isPending ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Deleting…
-                </>
-              ) : (
-                "Delete"
-              )}
-            </Button>
+              Discard reason
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

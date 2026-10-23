@@ -9,7 +9,7 @@ export function useDeleteQuack() {
 
   return useMutation({
     mutationFn: deleteQuack,
-    onSuccess: (_data, quackId) => {
+    onSuccess: (_data, { quackId }) => {
       // Drop the quack from every cached list (full feed and any active
       // search) so it is gone the moment the dialog closes…
       queryClient.setQueriesData<Quack[]>({ queryKey: quackKeys.lists() }, (quacks) =>

@@ -18,6 +18,9 @@ type QuackListProps = {
   // Takes the viewer to the new-quack form. Offered only to an author who
   // has posted nothing yet.
   onWriteFirst?: () => void
+  // Whether a delete dialog in the list holds a reason that would be lost on
+  // navigation. Dialogs are modal, so at most one is open at a time.
+  onDeletionDirtyChange?: (isDirty: boolean) => void
 }
 
 const emptyMessage = (search?: string, author?: QuackAuthorFilter) => {
@@ -37,6 +40,7 @@ export function QuackList({
   search,
   author,
   onWriteFirst,
+  onDeletionDirtyChange,
 }: QuackListProps) {
   return (
     <div className="flex flex-col">
@@ -90,6 +94,7 @@ export function QuackList({
         <QuackItem
           key={quack.id}
           quack={quack}
+          onDeletionDirtyChange={onDeletionDirtyChange}
         />
       ))}
     </div>
