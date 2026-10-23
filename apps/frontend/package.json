@@ -11,10 +11,10 @@
     "test": "vitest",
     "test:ci": "vitest run",
     "e2e": "playwright test",
-    "format:check": "prettier --check './src/**/*.{ts,tsx,css,js,cjs,mjs,json}'",
-    "format:write": "prettier --write './src/**/*.{ts,tsx,css,js,cjs,mjs,json}'",
-    "lint:check": "eslint './src/**/*.{ts,tsx,js,cjs,mjs}'",
-    "lint:fix": "eslint --fix './src/**/*.{ts,tsx,js,cjs,mjs}'"
+    "format:check": "prettier --check './src/**/*.{ts,tsx,css,js,cjs,mjs,json}' './e2e/**/*.ts' playwright.config.ts",
+    "format:write": "prettier --write './src/**/*.{ts,tsx,css,js,cjs,mjs,json}' './e2e/**/*.ts' playwright.config.ts",
+    "lint:check": "eslint './src/**/*.{ts,tsx,js,cjs,mjs}' './e2e/**/*.ts' playwright.config.ts",
+    "lint:fix": "eslint --fix './src/**/*.{ts,tsx,js,cjs,mjs}' './e2e/**/*.ts' playwright.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
