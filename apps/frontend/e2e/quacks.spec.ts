@@ -1,8 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 
+import { API_URL as API } from "./env"
 import { signIn } from "./signIn"
-
-const API = "http://localhost:4050/api"
 
 async function findQuackNotBy(page: Page, username: string): Promise<{ id: string }> {
   const response = await page.request.get(`${API}/quacks`)
