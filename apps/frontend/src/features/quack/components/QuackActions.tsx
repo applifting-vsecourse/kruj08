@@ -40,6 +40,10 @@ import { formatVoteCount } from "@/features/quack/lib/poll"
 // Mirrors DELETION_REASON_MAX_LENGTH on the server, which checks it again.
 const REASON_MAX_LENGTH = 500
 
+// Characters as the server and its database count them: code points, so an
+// emoji is one. `.max()` would count UTF-16 units, where it is two.
+const characterCount = (value: string) => Array.from(value).length
+
 // The reason is checked only where the server asks for one (an admin). For
 // everyone else the field is not on screen and anything goes.
 const deletionSchema = (isReasonRequired: boolean) =>
@@ -49,7 +53,10 @@ const deletionSchema = (isReasonRequired: boolean) =>
           .string()
           .trim()
           .min(1, "Write why you're deleting this quack")
-          .max(REASON_MAX_LENGTH, `Keep it under ${REASON_MAX_LENGTH} characters`)
+          .refine(
+            (reason) => characterCount(reason) <= REASON_MAX_LENGTH,
+            `Keep it under ${REASON_MAX_LENGTH} characters`,
+          )
       : z.string(),
   })
 
