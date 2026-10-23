@@ -2,7 +2,7 @@
 // later. Prisma is faked, so the test checks the query the repository asks
 // for — that is where the rule lives (see `notDeleted`).
 import { PrismaService } from '@/core/prisma/prisma.service';
-import { QuackRepository } from './quack.repository';
+import { notDeleted, QuackRepository } from './quack.repository';
 
 // Every way Prisma can read quacks. A read method is checked against all of
 // them, so switching from findUnique to findFirst does not dodge the test.
@@ -119,6 +119,17 @@ describe('QuackRepository', () => {
         where: { OR: expect.any(Array) as unknown, deletedAt: null },
       }),
     );
+  });
+
+  describe('notDeleted', () => {
+    it("can't be talked into returning deleted quacks", () => {
+      // No method passes `deletedAt` today. This pins the spread order, so a
+      // future caller (or a tidy-up of the helper) can't turn the filter off.
+      expect(notDeleted({ id: 'q1', deletedAt: { not: null } })).toEqual({
+        id: 'q1',
+        deletedAt: null,
+      });
+    });
   });
 
   describe('softDeleteOwnQuack', () => {
