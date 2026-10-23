@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { formatDate } from "@/lib/date"
 
 import type { Quack } from "@/features/quack/api/quackSchemas"
+import { QuackActions } from "@/features/quack/components/QuackActions"
 import { QuackMoodLabel } from "@/features/quack/components/QuackMoodLabel"
 import { QuackPoll } from "@/features/quack/components/QuackPoll"
 import { UsersName } from "@/features/quack/components/UsersName"
@@ -54,6 +55,14 @@ export function QuackItem({ quack }: QuackItemProps) {
           />
         ) : null}
       </div>
+
+      {/* Someone else's quack gets no menu at all rather than an empty one. */}
+      {quack.canDelete ? (
+        <QuackActions
+          quack={quack}
+          className="self-start"
+        />
+      ) : null}
     </article>
   )
 }

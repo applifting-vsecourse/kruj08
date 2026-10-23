@@ -38,6 +38,9 @@ export const quackSchema = z.object({
   user: quackUserSchema,
   // null is a plain post without a poll — also the common case.
   poll: pollSchema.nullable(),
+  // Decided by the server: true only for the quack's author; admins get no
+  // exception. The client shows the delete action on it and never works it out.
+  canDelete: z.boolean(),
 })
 
 export const quacksSchema = z.array(quackSchema)
