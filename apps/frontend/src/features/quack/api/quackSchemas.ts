@@ -45,6 +45,12 @@ export const quackSchema = z.object({
 
 export const quacksSchema = z.array(quackSchema)
 
+// Whose quacks a list shows, as the server's `author` parameter spells it:
+// "me" is the signed-in user, resolved from the session on the server.
+export const quackAuthorFilterSchema = z.enum(["me"])
+
+export type QuackAuthorFilter = z.infer<typeof quackAuthorFilterSchema>
+
 export type Quack = z.infer<typeof quackSchema>
 export type Poll = z.infer<typeof pollSchema>
 export type PollOption = z.infer<typeof pollOptionSchema>

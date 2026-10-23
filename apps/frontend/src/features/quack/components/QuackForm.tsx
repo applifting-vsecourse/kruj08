@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useImperativeHandle, type Ref } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { ListChecks, Loader2, Plus, X } from "lucide-react"
 import { useFieldArray, useForm, useWatch } from "react-hook-form"
@@ -87,7 +87,14 @@ type FormValues = z.infer<typeof schema>
 
 const emptyOptions = () => Array.from({ length: POLL_OPTIONS_MIN }, () => ({ text: "" }))
 
+export type QuackFormHandle = {
+  // Puts the cursor in the text field (scrolling to it if needed), for an
+  // invitation to post that lives elsewhere on the page.
+  focus: () => void
+}
+
 type QuackFormProps = {
+  ref?: Ref<QuackFormHandle>
   className?: string
   // Reports whether the form holds edits that would be lost on navigation.
   // The route turns it into a guard, so the form itself stays router-free.
@@ -97,12 +104,14 @@ type QuackFormProps = {
   defaultMood?: QuackMood | null
 }
 
-export function QuackForm({ className, defaultMood = null, onDirtyChange }: QuackFormProps) {
+export function QuackForm({ ref, className, defaultMood = null, onDirtyChange }: QuackFormProps) {
   const addQuack = useAddQuack()
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { text: "", mood: defaultMood ?? undefined, poll: { options: [] } },
   })
+
+  useImperativeHandle(ref, () => ({ focus: () => form.setFocus("text") }), [form])
 
   const { isDirty } = form.formState
   useEffect(() => {
