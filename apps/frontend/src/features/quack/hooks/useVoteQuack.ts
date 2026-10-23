@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 
+import { isNotFoundError } from "@/lib/api-client"
+
 import { quackKeys } from "@/features/quack/api/quackKeys"
 import type { Quack } from "@/features/quack/api/quackSchemas"
 import { voteQuack } from "@/features/quack/api/voteQuack"
@@ -20,6 +22,13 @@ export function useVoteQuack() {
       )
       // …then refetch anyway, so votes other people cast meanwhile come in too.
       void queryClient.invalidateQueries({ queryKey: quackKeys.lists() })
+    },
+    onError: (error) => {
+      // 404: the author deleted the quack after this feed loaded. Refetch, so
+      // it drops out of the feed instead of offering a poll nobody can vote in.
+      if (isNotFoundError(error)) {
+        void queryClient.invalidateQueries({ queryKey: quackKeys.lists() })
+      }
     },
   })
 }
