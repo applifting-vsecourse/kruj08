@@ -1,6 +1,12 @@
 export const QUACK_MOODS = ['happy', 'sad', 'angry', 'silly'] as const;
 export type QuackMood = (typeof QUACK_MOODS)[number];
 
+// Whose quacks a list shows. Only "me" for now; the filter is named for what
+// it narrows, so a profile page can later pass a username without changing
+// the contract.
+export const QUACK_AUTHOR_FILTERS = ['me'] as const;
+export type QuackAuthorFilter = (typeof QUACK_AUTHOR_FILTERS)[number];
+
 // Limits for a poll attached to a quack. Mirrored in the frontend form schema
 // so the user is told before the request is made; the server still validates.
 export const POLL_OPTIONS_MIN = 2;

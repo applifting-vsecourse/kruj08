@@ -64,6 +64,17 @@ const READS: {
     call: (repository) => repository.getQuacks({ search: 'duck' }, 'viewer'),
   },
   {
+    method: 'getQuacks',
+    label: 'my quacks',
+    call: (repository) => repository.getQuacks({ authorId: 'u1' }, 'u1'),
+  },
+  {
+    method: 'getQuacks',
+    label: 'a search in my quacks',
+    call: (repository) =>
+      repository.getQuacks({ search: 'duck', authorId: 'u1' }, 'u1'),
+  },
+  {
     method: 'findQuackById',
     label: 'one quack, e.g. before a vote',
     call: (repository) => repository.findQuackById('q1', 'viewer'),
@@ -117,6 +128,24 @@ describe('QuackRepository', () => {
     expect(prisma.quack.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { OR: expect.any(Array) as unknown, deletedAt: null },
+      }),
+    );
+  });
+
+  it('narrows a search to the author instead of replacing it', async () => {
+    const { prisma, repository } = fakePrisma();
+
+    await repository.getQuacks({ search: 'duck', authorId: 'u1' }, 'u1');
+
+    // Both conditions at the top level are ANDed by Prisma; neither may
+    // swallow the other.
+    expect(prisma.quack.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId: 'u1',
+          OR: expect.any(Array) as unknown,
+          deletedAt: null,
+        },
       }),
     );
   });

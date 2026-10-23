@@ -76,6 +76,33 @@ describe('QuacksService', () => {
       await service.getQuacks(viewer, { search: '   ' });
       expect(repository.getQuacks).toHaveBeenCalledWith({}, 'u1');
     });
+
+    it("narrows to the viewer's own quacks for author 'me'", async () => {
+      const repository = mock<QuackRepository>();
+      repository.getQuacks.mockResolvedValue([]);
+
+      const service = new QuacksService(repository);
+
+      await service.getQuacks({ id: 'u2' } as Identity, { author: 'me' });
+      // "me" is whoever the session says, never an id from the request
+      expect(repository.getQuacks).toHaveBeenCalledWith(
+        { authorId: 'u2' },
+        'u2',
+      );
+    });
+
+    it('keeps the search when narrowing to the viewer', async () => {
+      const repository = mock<QuackRepository>();
+      repository.getQuacks.mockResolvedValue([]);
+
+      const service = new QuacksService(repository);
+
+      await service.getQuacks(viewer, { search: ' duck ', author: 'me' });
+      expect(repository.getQuacks).toHaveBeenCalledWith(
+        { search: 'duck', authorId: 'u1' },
+        'u1',
+      );
+    });
   });
 
   describe('createQuack', () => {

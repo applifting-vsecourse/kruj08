@@ -92,6 +92,8 @@ const mapPrismaQuackToDomain = (quack: PrismaQuackWithPoll): Quack => ({
 export type QuackListFilter = {
   // Already trimmed and non-empty when present — the service normalises it.
   search?: string;
+  // Only this user's quacks. The service resolves it from the session.
+  authorId?: string;
 };
 
 // The one place that decides a deleted quack does not exist. Every read in
@@ -106,12 +108,12 @@ export const notDeleted = <Where extends Prisma.QuackWhereInput>(
   where: Where,
 ): Where & { deletedAt: null } => ({ ...where, deletedAt: null });
 
-// Plain substring match on the text and on the author's name and username,
-// case-insensitive (ILIKE). This is deliberately not full-text search: no
-// stemming, no ranking. It composes with `take`/`cursor` once the feed pages.
-const buildWhere = (filter: QuackListFilter): Prisma.QuackWhereInput => {
-  if (!filter.search) return {};
-  const contains = { contains: filter.search, mode: 'insensitive' as const };
+// The search is a plain substring match on the text and on the author's name
+// and username, case-insensitive (ILIKE). This is deliberately not full-text
+// search: no stemming, no ranking. It composes with `take`/`cursor` once the
+// feed pages.
+const searchWhere = (search: string): Prisma.QuackWhereInput => {
+  const contains = { contains: search, mode: 'insensitive' as const };
   return {
     OR: [
       { text: contains },
@@ -120,6 +122,13 @@ const buildWhere = (filter: QuackListFilter): Prisma.QuackWhereInput => {
     ],
   };
 };
+
+// The author and the search are sibling keys, which Prisma ANDs: a search on
+// "my quacks" only ever matches my quacks.
+const buildWhere = (filter: QuackListFilter): Prisma.QuackWhereInput => ({
+  ...(filter.authorId ? { userId: filter.authorId } : {}),
+  ...(filter.search ? searchWhere(filter.search) : {}),
+});
 
 /**
  * If you decide to choose a different ORM or database, you should only need to change the repository files methods implementation.

@@ -1,6 +1,10 @@
+import {
+  QUACK_AUTHOR_FILTERS,
+  QuackAuthorFilter,
+} from '@/modules/quack/domain/quack';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export const QUACK_SEARCH_MAX_LENGTH = 100;
 
@@ -19,4 +23,14 @@ export class ListQuacksQueryDto {
     typeof value === 'string' ? value.trim() : value,
   )
   search?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "`me` returns only the signed-in user's own quacks. Combines with `search`. Omit it for everyone's quacks.",
+    enum: QUACK_AUTHOR_FILTERS,
+    example: 'me',
+  })
+  @IsOptional()
+  @IsIn(QUACK_AUTHOR_FILTERS)
+  author?: QuackAuthorFilter;
 }
