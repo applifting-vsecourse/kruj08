@@ -1,4 +1,10 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Pin the source root. Without it TypeScript infers it from whatever files
+    // happen to be included, so an unrelated `include` edit silently moves the
+    // compiled entrypoint.
+    "rootDir": "./src"
+  },
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
 }

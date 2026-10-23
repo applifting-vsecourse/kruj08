@@ -8,6 +8,24 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # For `pnpm backend test:db`, which builds its own `quacker_test` database
+    # on this server. Same image, credentials and host port as the dev
+    # database in apps/backend/docker-compose.yml, so the .env that
+    # `pnpm env:check` writes points at it unchanged.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: quacker
+          POSTGRES_PASSWORD: quacker
+          POSTGRES_DB: quacker
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U quacker -d quacker"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v5
 
@@ -41,6 +59,9 @@ jobs:
 
       - name: Test backend
         run: pnpm backend test
+
+      - name: Test backend against Postgres
+        run: pnpm backend test:db
 
       - name: Test frontend
         run: pnpm frontend test:ci

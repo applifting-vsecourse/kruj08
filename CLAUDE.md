@@ -14,6 +14,7 @@ The worked example is the quack feed: `Quack` model → seed → repository → 
 - `pnpm dev` — everything: env files, Postgres (Docker), migrate, seed, both dev servers
 - `pnpm check-all` — lint + type-check + tests + build (same as CI)
 - `pnpm backend test` / `pnpm frontend test:ci` — unit tests
+- `pnpm backend test:db` — `*.db-spec.ts` tests against a real Postgres, for what a mocked Prisma can't show (raw SQL, constraints). Needs the dev database container up; each run drops and rebuilds a `quacker_test` database next to it, never the dev one
 - `pnpm backend prisma:migrations:run` — create/apply migrations after schema changes
 
 ## Conventions

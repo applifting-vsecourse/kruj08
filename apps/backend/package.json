@@ -1,7 +1,7 @@
 {
   "name": "backend",
   "version": "0.1.0",
-  "description": "Quacker backend \u2014 NestJS + Prisma + Postgres teaching template",
+  "description": "Quacker backend — NestJS + Prisma + Postgres teaching template",
   "private": true,
   "license": "MIT",
   "engines": {
@@ -25,6 +25,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:ci": "jest --ci",
+    "test:db": "jest --config jest.db.config.js --runInBand",
     "docker:up": "docker compose up",
     "docker:up:wait": "docker compose up -d --wait",
     "docker:up-rebuild": "docker compose down; docker compose up --renew-anon-volumes --build --force-recreate be",
