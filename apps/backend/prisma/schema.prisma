@@ -39,9 +39,12 @@ model Quack {
   userId    String
   createdAt DateTime   @default(now())
   updatedAt DateTime   @default(now()) @updatedAt
-  // Set when the author deletes the quack. The row stays, and so do its poll
-  // and votes, because no cascade fires; QuackRepository skips it on every read.
+  // Set when the quack is deleted, by its author or by an admin. The row
+  // stays, and so do its poll and votes, because no cascade fires;
+  // QuackRepository skips it on every read. Who deleted it and why is in
+  // QuackDeletion, written in the same transaction.
   deletedAt DateTime?
+  deletion  QuackDeletion?
   // A quack without a poll is a plain post — the common case.
   poll      Poll?
 
@@ -49,6 +52,26 @@ model Quack {
   // The feed: quacks that are not deleted, newest first.
   @@index([deletedAt, createdAt(sort: Desc)])
   @@map("quack")
+}
+
+// The record behind Quack.deletedAt: who deleted the quack, when and why.
+// Quack.deletedAt stays the flag every read filters on (and the feed index
+// covers); this row is what a future overview of deleted quacks reads. At
+// most one per quack, so the quack's id is the primary key.
+model QuackDeletion {
+  quack       Quack    @relation(fields: [quackId], references: [id], onDelete: Cascade)
+  quackId     String   @id
+  // The author for their own quack, otherwise the admin who removed it.
+  deletedBy   User     @relation(fields: [deletedById], references: [id], onDelete: Cascade)
+  deletedById String
+  // Required from an admin, absent when an author deletes their own quack.
+  // Shown to nobody in the app for now.
+  reason      String?  @db.VarChar(500)
+  // The same instant as Quack.deletedAt, so the record stands on its own.
+  createdAt   DateTime @default(now())
+
+  @@index([deletedById])
+  @@map("quack_deletion")
 }
 
 // Satellite of a quack: the quack's text is the question, so the poll itself
@@ -156,8 +179,9 @@ model User {
   updatedAt     DateTime
   sessions      Session[]
   accounts      Account[]
-  quacks        Quack[]
-  pollVotes     PollVote[]
+  quacks         Quack[]
+  pollVotes      PollVote[]
+  quackDeletions QuackDeletion[]
   role          UserRole  @default(user)
 
   username        String? @db.VarChar(50)

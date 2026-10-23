@@ -19,7 +19,9 @@ const QUACK_READS = [
 
 type FakePrisma = {
   quack: Record<string, jest.Mock>;
+  quackDeletion: { create: jest.Mock };
   pollVote: { upsert: jest.Mock };
+  $transaction: jest.Mock;
 };
 
 const fakePrisma = (): { prisma: FakePrisma; repository: QuackRepository } => {
@@ -31,7 +33,15 @@ const fakePrisma = (): { prisma: FakePrisma; repository: QuackRepository } => {
   );
   quack.create = jest.fn();
   quack.updateMany = jest.fn().mockResolvedValue({ count: 1 });
-  const prisma: FakePrisma = { quack, pollVote: { upsert: jest.fn() } };
+  const prisma: FakePrisma = {
+    quack,
+    quackDeletion: { create: jest.fn() },
+    pollVote: { upsert: jest.fn() },
+    // An interactive transaction runs its callback against the same fake.
+    $transaction: jest.fn((run: (tx: unknown) => Promise<unknown>) =>
+      run(prisma),
+    ),
+  };
   return {
     prisma,
     repository: new QuackRepository(prisma as unknown as PrismaService),
@@ -175,13 +185,33 @@ describe('QuackRepository', () => {
       });
     });
 
-    it('reports when nothing matched', async () => {
+    it('records the author as the one who deleted it, at the same instant', async () => {
+      const { prisma, repository } = fakePrisma();
+
+      await repository.softDeleteOwnQuack('q1', 'u1');
+
+      const [{ data: quackData }] = prisma.quack.updateMany.mock.calls[0] as [
+        { data: { deletedAt: Date } },
+      ];
+      expect(prisma.quackDeletion.create).toHaveBeenCalledWith({
+        data: {
+          quackId: 'q1',
+          deletedById: 'u1',
+          reason: null,
+          createdAt: quackData.deletedAt,
+        },
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports when nothing matched and records nothing', async () => {
       const { prisma, repository } = fakePrisma();
       prisma.quack.updateMany.mockResolvedValue({ count: 0 });
 
       await expect(repository.softDeleteOwnQuack('q1', 'u1')).resolves.toBe(
         false,
       );
+      expect(prisma.quackDeletion.create).not.toHaveBeenCalled();
     });
   });
 });

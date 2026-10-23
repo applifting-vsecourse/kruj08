@@ -220,10 +220,13 @@ Please stop tagging me.`,
       pollOptions,
       userId: author.id,
       createdAt: new Date(now - minutesAgo * MINUTE_IN_MS),
-      deletedAt:
+      deletion:
         deletedMinutesAgo === undefined
           ? undefined
-          : new Date(now - deletedMinutesAgo * MINUTE_IN_MS),
+          : {
+              at: new Date(now - deletedMinutesAgo * MINUTE_IN_MS),
+              byUserId: author.id,
+            },
     });
 
     if (quack.poll && votes) {
