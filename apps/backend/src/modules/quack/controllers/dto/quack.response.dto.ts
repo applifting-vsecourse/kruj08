@@ -1,5 +1,7 @@
 import {
   canModerateQuacks,
+  DeletedQuack,
+  isDeletedQuack,
   Poll,
   Quack,
   QUACK_MOODS,
@@ -66,11 +68,22 @@ export class QuackResponseDto {
   @ApiProperty()
   id!: string;
 
-  @ApiProperty()
-  text!: string;
+  @ApiProperty({
+    description:
+      'True for a deleted quack that is listed only because live replies remain under it. It then carries no content: text, mood and poll are null, and nobody may delete it again.',
+  })
+  deleted!: boolean;
 
   @ApiProperty({
-    description: 'Mood of the quack, or null for a plain post.',
+    type: String,
+    nullable: true,
+    description: 'Body of the quack. Null only when `deleted` is true.',
+  })
+  text!: string | null;
+
+  @ApiProperty({
+    description:
+      'Mood of the quack, or null for a plain post (and for a deleted one).',
     enum: QUACK_MOODS,
     nullable: true,
   })
@@ -88,13 +101,26 @@ export class QuackResponseDto {
   @ApiProperty({
     type: PollDto,
     nullable: true,
-    description: 'The attached poll, or null for a plain post.',
+    description:
+      'The attached poll, or null for a plain post, a reply or a deleted quack.',
   })
   poll!: PollDto | null;
 
   @ApiProperty({
     description:
-      'Whether the signed-in user may delete this quack: true for its author, and for an admin on every quack.',
+      'Live replies under this quack. Always 0 for a reply: threads are one level deep.',
+  })
+  replyCount!: number;
+
+  @ApiProperty({
+    description:
+      'True when a list includes this quack because of one of its replies: a search hit in a reply, or your own reply under `author=me`. The client opens the thread. Always false outside a narrowed list.',
+  })
+  matchedInReplies!: boolean;
+
+  @ApiProperty({
+    description:
+      'Whether the signed-in user may delete this quack: true for its author, and for an admin on every quack. Always false for a deleted one.',
   })
   canDelete!: boolean;
 
@@ -109,7 +135,7 @@ export class QuackResponseDto {
   // quack and whether that needs a reason. The client only displays these, it
   // never works them out itself.
   static fromDomain(
-    quack: Quack,
+    quack: (Quack | DeletedQuack) & { matchedInReplies?: boolean },
     viewer: { id: string; role: string },
   ): QuackResponseDto {
     if (!quack.user) {
@@ -117,12 +143,8 @@ export class QuackResponseDto {
         `QuackResponseDto.fromDomain expected quack.user to be loaded for quack ${quack.id}`,
       );
     }
-    const isAuthor = quack.userId === viewer.id;
-    const isModerator = canModerateQuacks(viewer.role);
-    return {
+    const common = {
       id: quack.id,
-      text: quack.text,
-      mood: quack.mood,
       userId: quack.userId,
       createdAt: quack.createdAt,
       user: {
@@ -130,6 +152,27 @@ export class QuackResponseDto {
         name: quack.user.name,
         username: quack.user.username,
       },
+      replyCount: quack.replyCount,
+      matchedInReplies: quack.matchedInReplies ?? false,
+    };
+    if (isDeletedQuack(quack)) {
+      return {
+        ...common,
+        deleted: true,
+        text: null,
+        mood: null,
+        poll: null,
+        canDelete: false,
+        deletionReasonRequired: false,
+      };
+    }
+    const isAuthor = quack.userId === viewer.id;
+    const isModerator = canModerateQuacks(viewer.role);
+    return {
+      ...common,
+      deleted: false,
+      text: quack.text,
+      mood: quack.mood,
       poll: quack.poll ? PollDto.fromDomain(quack.poll, { isAuthor }) : null,
       canDelete: isAuthor || isModerator,
       deletionReasonRequired: isModerator,

@@ -1,4 +1,5 @@
 import {
+  CannotReplyToReplyError,
   DeletionReasonRequiredError,
   InvalidPollError,
   NotAModeratorError,
@@ -38,6 +39,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateQuackDto } from './dto/create-quack.dto';
+import { CreateReplyDto } from './dto/create-reply.dto';
 import { DeleteQuackDto } from './dto/delete-quack.dto';
 import { ListQuacksQueryDto } from './dto/list-quacks-query.dto';
 import { QuackResponseDto } from './dto/quack.response.dto';
@@ -60,6 +62,8 @@ export class QuacksController {
   @Get()
   @ApiOperation({
     summary: 'List quacks, optionally narrowed by a search or to your own',
+    description:
+      'Top-level quacks only, newest first; replies come from GET /quacks/{id}/replies. A deleted quack with live replies stays in the list as a placeholder (`deleted: true`, no content). A search also matches the text and author of live replies, and `author=me` also lists quacks you replied under; such quacks come with `matchedInReplies: true`.',
   })
   @ApiResponse({ status: 200, type: [QuackResponseDto] })
   @ApiResponse({ status: 400, description: 'Invalid query' })
@@ -96,6 +100,75 @@ export class QuacksController {
     } catch (error) {
       if (error instanceof InvalidPollError) {
         throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Get(':id/replies')
+  @ApiOperation({
+    summary: 'List the live replies under a quack, oldest first',
+    description:
+      'Works for a deleted quack too, as long as the list still shows it as a placeholder.',
+  })
+  @ApiParam({ name: 'id', description: 'Id of the quack replied to' })
+  @ApiResponse({ status: 200, type: [QuackResponseDto] })
+  @ApiResponse({ status: 401, description: 'Not signed in' })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Quack not found, deleted with no replies left, or itself a reply',
+  })
+  async listReplies(
+    @User() user: Identity,
+    @Param('id') id: string,
+  ): Promise<QuackResponseDto[]> {
+    try {
+      const replies = await this.quacksService.getReplies(user, id);
+      return replies.map((reply) => QuackResponseDto.fromDomain(reply, user));
+    } catch (error) {
+      if (error instanceof QuackNotFoundError) {
+        throw new NotFoundException(error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Post(':id/replies')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Reply to a quack',
+    description:
+      'A reply has text and an optional mood, no poll. Threads are one level deep: a reply cannot be replied to. A deleted quack takes no new replies, even while its existing replies are still shown under it.',
+  })
+  @ApiParam({ name: 'id', description: 'Id of the quack to reply to' })
+  @ApiResponse({ status: 201, type: QuackResponseDto })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation failed, or the quack is itself a reply',
+  })
+  @ApiResponse({ status: 401, description: 'Not signed in' })
+  @ApiResponse({
+    status: 404,
+    description: 'Quack not found or deleted (possibly in the meantime)',
+  })
+  async reply(
+    @User() user: Identity,
+    @Param('id') id: string,
+    @Body() body: CreateReplyDto,
+  ): Promise<QuackResponseDto> {
+    try {
+      const reply = await this.quacksService.createReply(user, id, {
+        text: body.text,
+        mood: body.mood,
+      });
+      return QuackResponseDto.fromDomain(reply, user);
+    } catch (error) {
+      if (error instanceof CannotReplyToReplyError) {
+        throw new BadRequestException(error.message);
+      }
+      if (error instanceof QuackNotFoundError) {
+        throw new NotFoundException(error.message);
       }
       throw error;
     }
@@ -145,7 +218,7 @@ export class QuacksController {
   @ApiOperation({
     summary: 'Delete one of your own quacks, or any quack as an admin',
     description:
-      'An author may delete their own quack. An admin may delete any quack, and must give a reason every time, for their own quacks too. The quack disappears from the feed, search and voting for everyone, together with its poll, and who deleted it is recorded. It cannot be undone.',
+      'An author may delete their own quack or reply. An admin may delete any, and must give a reason every time, for their own too. The quack disappears from the feed, search and voting for everyone, together with its poll, and who deleted it is recorded; if live replies remain under it, it stays in the list as a placeholder without content. It cannot be undone.',
   })
   @ApiParam({ name: 'id', description: 'Id of the quack to delete' })
   @ApiBody({ type: DeleteQuackDto, required: false })
