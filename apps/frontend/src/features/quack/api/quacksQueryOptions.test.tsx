@@ -16,6 +16,9 @@ const quackJson = {
   poll: null,
   canDelete: false,
   deletionReasonRequired: false,
+  deleted: false,
+  replyCount: 0,
+  matchedInReplies: false,
 }
 
 // The first request answers with someone else's quack; every later one hangs,

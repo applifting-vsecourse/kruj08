@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { z } from "zod"
@@ -39,11 +39,22 @@ function QuacksPage() {
   const navigate = Route.useNavigate()
   const formRef = useRef<QuackFormHandle>(null)
   const [searchInput, setSearchInput] = useState("")
-  // A half-written quack (or poll), or an admin's half-written reason for
-  // deleting one, is worth a warning before the user leaves. The form and the
+  // A half-written quack (or poll) or reply, or an admin's half-written
+  // reason for deleting one, is worth a warning before the user leaves. The form and the
   // list report their dirty state; the route owns the guard, as Settings does.
   const [hasUnsavedQuack, setHasUnsavedQuack] = useState(false)
   const [hasUnsavedDeletionReason, setHasUnsavedDeletionReason] = useState(false)
+  // Replies are written inline, so several threads can hold one at a time.
+  const [unsavedReplies, setUnsavedReplies] = useState<ReadonlySet<string>>(() => new Set())
+  const handleReplyDirtyChange = useCallback((quackId: string, isDirty: boolean) => {
+    setUnsavedReplies((previous) => {
+      if (previous.has(quackId) === isDirty) return previous
+      const next = new Set(previous)
+      if (isDirty) next.add(quackId)
+      else next.delete(quackId)
+      return next
+    })
+  }, [])
   const search = normalizeQuackSearch(useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS))
   const quacksQuery = useQuery(quacksQueryOptions({ search, author }))
 
@@ -64,7 +75,9 @@ function QuacksPage() {
   return (
     <>
       <Seo title="Quacks" />
-      <UnsavedChangesGuard hasUnsavedChanges={hasUnsavedQuack || hasUnsavedDeletionReason} />
+      <UnsavedChangesGuard
+        hasUnsavedChanges={hasUnsavedQuack || hasUnsavedDeletionReason || unsavedReplies.size > 0}
+      />
       <section className="mx-auto w-full max-w-2xl px-4 py-8">
         <h1 className="mb-4 text-2xl font-semibold tracking-tight">Quacks</h1>
 
@@ -111,6 +124,7 @@ function QuacksPage() {
               onReload={() => void quacksQuery.refetch()}
               onWriteFirst={() => formRef.current?.focus()}
               onDeletionDirtyChange={setHasUnsavedDeletionReason}
+              onReplyDirtyChange={handleReplyDirtyChange}
             />
           </TabsContent>
         </Tabs>

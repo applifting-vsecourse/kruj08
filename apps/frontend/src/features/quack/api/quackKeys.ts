@@ -15,4 +15,7 @@ export const quackKeys = {
   // One cache entry per search and author, so results for an old filter are
   // never shown under a new one.
   list: (filter: QuackListFilter) => [...quackKeys.lists(), filter] as const,
+  // The thread under one quack. Outside `lists()`, so posting a quack does
+  // not refetch every open thread.
+  replies: (quackId: string) => [...quackKeys.all(), "replies", quackId] as const,
 }

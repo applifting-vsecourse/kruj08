@@ -46,13 +46,13 @@ const characterCount = (value: string) => Array.from(value).length
 
 // The reason is checked only where the server asks for one (an admin). For
 // everyone else the field is not on screen and anything goes.
-const deletionSchema = (isReasonRequired: boolean) =>
+const deletionSchema = (isReasonRequired: boolean, noun: string) =>
   z.object({
     reason: isReasonRequired
       ? z
           .string()
           .trim()
-          .min(1, "Write why you're deleting this quack")
+          .min(1, `Write why you're deleting this ${noun}`)
           .refine(
             (reason) => characterCount(reason) <= REASON_MAX_LENGTH,
             `Keep it under ${REASON_MAX_LENGTH} characters`,
@@ -64,6 +64,8 @@ type DeletionValues = { reason: string }
 
 type QuackActionsProps = {
   quack: Quack
+  // A reply is deleted the same way; only the words change.
+  isReply?: boolean
   className?: string
   // Reports whether the dialog holds a reason that would be lost on
   // navigation. The route turns it into a guard, as it does for the form.
@@ -73,15 +75,23 @@ type QuackActionsProps = {
 // The "⋯" menu on a quack and the confirmation behind its Delete item.
 // QuackItem renders it only when the server says `canDelete`. When the server
 // also says `deletionReasonRequired` (an admin), the confirmation asks why.
-export function QuackActions({ quack, className, onDirtyChange }: QuackActionsProps) {
+export function QuackActions({
+  quack,
+  isReply = false,
+  className,
+  onDirtyChange,
+}: QuackActionsProps) {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
   const [isDiscardOpen, setIsDiscardOpen] = useState(false)
   const deleteQuack = useDeleteQuack()
   const votes = quack.poll?.totalVotes ?? 0
   const isReasonRequired = quack.deletionReasonRequired
+  const noun = isReply ? "reply" : "quack"
+  const Noun = isReply ? "Reply" : "Quack"
+  const place = isReply ? "the thread" : "the feed"
 
   const form = useForm<DeletionValues>({
-    resolver: zodResolver(deletionSchema(isReasonRequired)),
+    resolver: zodResolver(deletionSchema(isReasonRequired, noun)),
     defaultValues: { reason: "" },
   })
 
@@ -137,7 +147,7 @@ export function QuackActions({ quack, className, onDirtyChange }: QuackActionsPr
     }
     form.reset()
     setIsConfirmOpen(false)
-    toast.success("Quack deleted")
+    toast.success(`${Noun} deleted`)
   })
 
   return (
@@ -147,7 +157,7 @@ export function QuackActions({ quack, className, onDirtyChange }: QuackActionsPr
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="Quack actions"
+            aria-label={`${Noun} actions`}
             className={className}
           >
             <Ellipsis />
@@ -177,19 +187,29 @@ export function QuackActions({ quack, className, onDirtyChange }: QuackActionsPr
           }}
         >
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete quack?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {noun}?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="flex flex-col gap-2">
                 {/* An admin may be deleting someone else's words, so the
                     dialog names whose. */}
                 {isReasonRequired ? (
                   <p>
-                    The quack by {quack.user.name} (@{quack.user.username}) will disappear from the
-                    feed for everyone, its author included. This can&apos;t be undone.
+                    The {noun} by {quack.user.name} (@{quack.user.username}) will disappear from{" "}
+                    {place} for everyone, its author included. This can&apos;t be undone.
                   </p>
                 ) : (
-                  <p>The quack will disappear from the feed for everyone.</p>
+                  <p>
+                    The {noun} will disappear from {place} for everyone.
+                  </p>
                 )}
+                {/* Replies belong to the people who wrote them, so they stay,
+                    and the author should know what is left in the quack's
+                    place. */}
+                {quack.replyCount > 0 ? (
+                  <p>
+                    {`${quack.replyCount === 1 ? "Its reply stays" : `Its ${quack.replyCount} replies stay`}, under “Deleted quack by @${quack.user.username}”.`}
+                  </p>
+                ) : null}
                 {/* Votes are other people's answers, so losing them is worth
                     a sentence. A poll nobody answered loses nothing. */}
                 {votes > 0 ? (
@@ -237,7 +257,7 @@ export function QuackActions({ quack, className, onDirtyChange }: QuackActionsPr
                   role="alert"
                   className="text-sm text-destructive"
                 >
-                  Couldn&apos;t delete the quack. Try again.
+                  Couldn&apos;t delete the {noun}. Try again.
                 </p>
               ) : null}
 
@@ -276,8 +296,8 @@ export function QuackActions({ quack, className, onDirtyChange }: QuackActionsPr
           <AlertDialogHeader>
             <AlertDialogTitle>Discard the reason?</AlertDialogTitle>
             <AlertDialogDescription>
-              You&apos;ve started writing why this quack should go. If you close now, the reason is
-              lost and the quack stays.
+              You&apos;ve started writing why this {noun} should go. If you close now, the reason is
+              lost and the {noun} stays.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

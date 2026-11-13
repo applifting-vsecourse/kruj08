@@ -3,11 +3,12 @@ import { Loader2, PenLine, RefreshCw } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 
-import type { Quack, QuackAuthorFilter } from "@/features/quack/api/quackSchemas"
+import type { ListedQuack, QuackAuthorFilter } from "@/features/quack/api/quackSchemas"
 import { QuackItem } from "@/features/quack/components/QuackItem"
+import { QuackThread } from "@/features/quack/components/QuackThread"
 
 type QuackListProps = {
-  quacks: Quack[]
+  quacks: ListedQuack[]
   isLoading?: boolean
   error?: Error
   onReload?: () => void
@@ -22,6 +23,9 @@ type QuackListProps = {
   // navigation. Only that dialog reports, and dialogs are modal, so one flag
   // is enough.
   onDeletionDirtyChange?: (isDirty: boolean) => void
+  // Whether a thread holds a reply that would be lost, keyed by the quack.
+  // Unlike the modal dialog, several threads can hold one at a time.
+  onReplyDirtyChange?: (quackId: string, isDirty: boolean) => void
 }
 
 const emptyMessage = (search?: string, author?: QuackAuthorFilter) => {
@@ -42,6 +46,7 @@ export function QuackList({
   author,
   onWriteFirst,
   onDeletionDirtyChange,
+  onReplyDirtyChange,
 }: QuackListProps) {
   return (
     <div className="flex flex-col">
@@ -96,7 +101,13 @@ export function QuackList({
           key={quack.id}
           quack={quack}
           onDeletionDirtyChange={onDeletionDirtyChange}
-        />
+        >
+          <QuackThread
+            quack={quack}
+            onReplyDirtyChange={onReplyDirtyChange}
+            onDeletionDirtyChange={onDeletionDirtyChange}
+          />
+        </QuackItem>
       ))}
     </div>
   )
