@@ -47,6 +47,11 @@ model Quack {
   deletion  QuackDeletion?
   // A quack without a poll is a plain post — the common case.
   poll      Poll?
+  // Set when this quack is a reply: the satellite that names its parent. A
+  // top-level quack has none (docs/adr/001-reply-is-a-quack.md).
+  reply     QuackReply?  @relation("ReplyQuack")
+  // The replies to this quack, when it is a top-level one.
+  replies   QuackReply[] @relation("ReplyParent")
 
   @@index([userId])
   // The feed: quacks that are not deleted, newest first.
@@ -77,6 +82,28 @@ model QuackDeletion {
 
   @@index([deletedById])
   @@map("quack_deletion")
+}
+
+// Satellite that makes a quack a reply (docs/adr/001-reply-is-a-quack.md).
+// The reply itself is an ordinary quack row, so it is soft-deleted, moderated
+// and searched like any other; this row only says what it answers. Threads
+// are one level deep and replies carry no poll — QuackRepository.createReply
+// checks both in the same statement that writes this row.
+model QuackReply {
+  quack    Quack  @relation("ReplyQuack", fields: [quackId], references: [id], onDelete: Cascade)
+  quackId  String @id
+  // No cascade: the database refuses to hard-delete a quack that still has
+  // someone else's reply under it (today that only happens through the
+  // cascade when an account is deleted), because replies belong to whoever
+  // wrote them. The constraint is DEFERRABLE INITIALLY DEFERRED (migration
+  // 20261113121422_quack_reply_parent_deferred; Prisma cannot say so here):
+  // checked any earlier, it would also refuse an account whose only replies
+  // sit under its own quacks, before the cascade got to remove them.
+  parent   Quack  @relation("ReplyParent", fields: [parentId], references: [id], onDelete: NoAction)
+  parentId String
+
+  @@index([parentId])
+  @@map("quack_reply")
 }
 
 // Satellite of a quack: the quack's text is the question, so the poll itself
