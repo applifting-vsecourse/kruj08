@@ -1,6 +1,7 @@
 // Example unit test — the pattern to copy for your own services.
 // The repository is mocked, so the test exercises the service in isolation.
 import {
+  CannotReplyToReplyError,
   DeletionReasonRequiredError,
   InvalidPollError,
   NotAModeratorError,
@@ -24,6 +25,7 @@ const aQuack = (overrides: Partial<Quack> = {}): Quack => ({
   updatedAt: new Date('2026-01-01T12:00:00Z'),
   user: { id: 'u1', name: 'Caffeinated Duck', username: 'CaffeinatedDuck' },
   poll: null,
+  replyCount: 0,
   ...overrides,
 });
 
@@ -44,7 +46,7 @@ const admin = { id: 'admin1', role: 'admin' } as Identity;
 describe('QuacksService', () => {
   describe('getQuacks', () => {
     it('returns quacks from the repository for the viewer', async () => {
-      const quacks = [aQuack()];
+      const quacks = [{ ...aQuack(), matchedInReplies: false }];
       const repository = mock<QuackRepository>();
       repository.getQuacks.mockResolvedValue(quacks);
 
@@ -197,6 +199,89 @@ describe('QuacksService', () => {
       expect(repository.createQuack).toHaveBeenCalledWith(
         expect.objectContaining({ pollOptions: ['Pizza', 'pizza'] }),
       );
+    });
+  });
+
+  describe('getReplies', () => {
+    it("returns the thread for the viewer, who decides the replies' poll fields", async () => {
+      const replies = [aQuack({ id: 'r1' }), aQuack({ id: 'r2' })];
+      const repository = mock<QuackRepository>();
+      repository.getReplies.mockResolvedValue(replies);
+
+      const service = new QuacksService(repository);
+
+      await expect(service.getReplies(viewer, 'q1')).resolves.toEqual(replies);
+      expect(repository.getReplies).toHaveBeenCalledWith('q1', 'u1');
+    });
+
+    it('reports a quack no list shows as not found', async () => {
+      const repository = mock<QuackRepository>();
+      repository.getReplies.mockResolvedValue(null);
+
+      const service = new QuacksService(repository);
+
+      await expect(service.getReplies(viewer, 'q1')).rejects.toBeInstanceOf(
+        QuackNotFoundError,
+      );
+    });
+  });
+
+  describe('createReply', () => {
+    it('writes a reply by the signed-in user under the quack', async () => {
+      const created = aQuack({ id: 'r1', text: 'same' });
+      const repository = mock<QuackRepository>();
+      repository.createReply.mockResolvedValue(created);
+
+      const service = new QuacksService(repository);
+
+      await expect(
+        service.createReply(viewer, 'q1', { text: 'same' }),
+      ).resolves.toEqual(created);
+      // the author comes from the session; no mood is stored as null
+      expect(repository.createReply).toHaveBeenCalledWith({
+        parentId: 'q1',
+        text: 'same',
+        mood: null,
+        userId: 'u1',
+      });
+      // the write decided; nothing was read before it
+      expect(repository.findReplyTarget).not.toHaveBeenCalled();
+    });
+
+    it('keeps the chosen mood', async () => {
+      const repository = mock<QuackRepository>();
+      repository.createReply.mockResolvedValue(aQuack({ mood: 'happy' }));
+
+      const service = new QuacksService(repository);
+
+      await service.createReply(viewer, 'q1', { text: 'yay', mood: 'happy' });
+      expect(repository.createReply).toHaveBeenCalledWith(
+        expect.objectContaining({ mood: 'happy' }),
+      );
+    });
+
+    it('refuses a reply to a reply', async () => {
+      const repository = mock<QuackRepository>();
+      repository.createReply.mockResolvedValue(null);
+      repository.findReplyTarget.mockResolvedValue({ isReply: true });
+
+      const service = new QuacksService(repository);
+
+      await expect(
+        service.createReply(viewer, 'r1', { text: 'nested' }),
+      ).rejects.toBeInstanceOf(CannotReplyToReplyError);
+    });
+
+    it('reports a quack that is gone or deleted as not found', async () => {
+      const repository = mock<QuackRepository>();
+      repository.createReply.mockResolvedValue(null);
+      repository.findReplyTarget.mockResolvedValue(null);
+
+      const service = new QuacksService(repository);
+
+      await expect(
+        service.createReply(viewer, 'q1', { text: 'too late' }),
+      ).rejects.toBeInstanceOf(QuackNotFoundError);
     });
   });
 

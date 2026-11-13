@@ -7,10 +7,13 @@ import {
   User as PrismaUser,
 } from '@/generated/prisma/client';
 import {
+  DeletedQuack,
+  ListedQuack,
   MODERATOR_ROLES,
   Poll,
   PollOptionNotFoundError,
   Quack,
+  QuackAuthor,
   QuackMood,
 } from '@/modules/quack/domain/quack';
 import { Injectable } from '@nestjs/common';
@@ -47,6 +50,8 @@ const withPoll = (viewerId: string): QuackIncludeWithPoll => ({
 
 type PrismaQuackWithPoll = PrismaQuack & {
   user?: PrismaUser;
+  // Live replies, when the read asked for the count (lists only).
+  _count?: { replies: number };
   poll?:
     | (PrismaPoll & {
         options: (PrismaPollOption & { _count: { votes: number } })[];
@@ -72,6 +77,13 @@ const mapPrismaPollToDomain = (
   };
 };
 
+const mapPrismaUserToAuthor = (user: PrismaUser): QuackAuthor => ({
+  id: user.id,
+  name: user.name,
+  // The handle as typed; BetterAuth keeps the lowercased copy in `username`.
+  username: user.displayUsername ?? user.username ?? '',
+});
+
 const mapPrismaQuackToDomain = (quack: PrismaQuackWithPoll): Quack => ({
   id: quack.id,
   text: quack.text,
@@ -79,16 +91,27 @@ const mapPrismaQuackToDomain = (quack: PrismaQuackWithPoll): Quack => ({
   userId: quack.userId,
   createdAt: quack.createdAt,
   updatedAt: quack.updatedAt,
-  user: quack.user
-    ? {
-        id: quack.user.id,
-        name: quack.user.name,
-        // The handle as typed; BetterAuth keeps the lowercased copy in `username`.
-        username: quack.user.displayUsername ?? quack.user.username ?? '',
-      }
-    : undefined,
+  user: quack.user ? mapPrismaUserToAuthor(quack.user) : undefined,
   poll: quack.poll ? mapPrismaPollToDomain(quack.poll) : null,
+  replyCount: quack._count?.replies ?? 0,
 });
+
+// A row a list read may return deleted (see `listedInThreads`) becomes a
+// placeholder here, built field by field so the text, mood and poll the row
+// still holds never leave this file.
+const mapPrismaListedQuackToDomain = (
+  quack: PrismaQuackWithPoll,
+): Quack | DeletedQuack =>
+  quack.deletedAt
+    ? {
+        id: quack.id,
+        deleted: true,
+        userId: quack.userId,
+        createdAt: quack.createdAt,
+        user: quack.user ? mapPrismaUserToAuthor(quack.user) : undefined,
+        replyCount: quack._count?.replies ?? 0,
+      }
+    : mapPrismaQuackToDomain(quack);
 
 export type QuackListFilter = {
   // Already trimmed and non-empty when present — the service normalises it.
@@ -108,6 +131,29 @@ export type QuackListFilter = {
 export const notDeleted = <Where extends Prisma.QuackWhereInput>(
   where: Where,
 ): Where & { deletedAt: null } => ({ ...where, deletedAt: null });
+
+// A reply that is not deleted and `matches`. A deleted reply neither counts,
+// nor is found by a search, nor keeps a placeholder alive.
+const liveReply = (
+  matches: Prisma.QuackWhereInput = {},
+): Prisma.QuackReplyWhereInput => ({ quack: notDeleted(matches) });
+
+// The one exception to `notDeleted`, and the only place that makes it. A
+// list shows top-level quacks only, each either alive and matching itself, or
+// — alive or deleted — with a live reply that matches. That one condition
+// gives the feed its placeholders (a deleted quack with live replies), a
+// search its hits in replies, and "mine" the threads the viewer replied in.
+// A deleted quack only ever comes back through a reply, never through its own
+// text, and mapPrismaListedQuackToDomain empties it. Exported for its spec.
+export const listedInThreads = (
+  matches: Prisma.QuackWhereInput,
+): Prisma.QuackWhereInput => ({
+  reply: { is: null },
+  OR: [notDeleted(matches), { replies: { some: liveReply(matches) } }],
+});
+
+// Thrown inside createReply's transaction to roll it back; never escapes.
+class ReplyRefused extends Error {}
 
 // The search is a plain substring match on the text and on the author's name
 // and username, case-insensitive (ILIKE). This is deliberately not full-text
@@ -168,13 +214,61 @@ export class QuackRepository {
   async getQuacks(
     filter: QuackListFilter = {},
     viewerId: string,
-  ): Promise<Quack[]> {
+  ): Promise<ListedQuack[]> {
+    const matches = buildWhere(filter);
+    const isNarrowed = Object.keys(matches).length > 0;
     const quacks = await this.prisma.quack.findMany({
-      where: notDeleted(buildWhere(filter)),
-      include: withPoll(viewerId),
+      where: listedInThreads(matches),
+      include: {
+        ...withPoll(viewerId),
+        _count: { select: { replies: { where: liveReply() } } },
+        // At most one matching live reply: only whether there is one matters.
+        replies: {
+          where: liveReply(matches),
+          select: { quackId: true },
+          take: 1,
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
-    return quacks.map(mapPrismaQuackToDomain);
+    return quacks.map((quack) => ({
+      ...mapPrismaListedQuackToDomain(quack),
+      // Unnarrowed, every quack with a live reply would "match" in it.
+      matchedInReplies: isNarrowed && quack.replies.length > 0,
+    }));
+  }
+
+  // The live replies under a quack a list shows, oldest first. Null when no
+  // list shows it: it does not exist, is deleted with no live reply left, or
+  // is a reply itself.
+  async getReplies(
+    parentId: string,
+    viewerId: string,
+  ): Promise<Quack[] | null> {
+    const parent = await this.prisma.quack.findFirst({
+      where: { ...listedInThreads({}), id: parentId },
+      select: { id: true },
+    });
+    if (!parent) {
+      return null;
+    }
+    const replies = await this.prisma.quack.findMany({
+      where: notDeleted({ reply: { is: { parentId } } }),
+      include: withPoll(viewerId),
+      // The id breaks ties between replies posted in the same millisecond.
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return replies.map(mapPrismaQuackToDomain);
+  }
+
+  // Whether a live quack is a reply, or null when there is no live quack with
+  // this id. Only for telling apart why createReply refused.
+  async findReplyTarget(id: string): Promise<{ isReply: boolean } | null> {
+    const quack = await this.prisma.quack.findUnique({
+      where: notDeleted({ id }),
+      select: { reply: { select: { parentId: true } } },
+    });
+    return quack ? { isReply: quack.reply !== null } : null;
   }
 
   async findQuackById(id: string, viewerId: string): Promise<Quack | null> {
@@ -272,6 +366,53 @@ export class QuackRepository {
       include: withPoll(createQuackData.userId),
     });
     return mapPrismaQuackToDomain(quack);
+  }
+
+  // The reply quack and the row that makes it one, in one transaction. The
+  // INSERT … SELECT of that row alone decides whether the reply may exist: it
+  // writes only while the parent is alive and is not a reply itself, so no
+  // request slips in between a check and the write. It also takes a share
+  // lock on the parent, so a deletion running at the same time either waits
+  // and comes after the reply, or goes first and the reply is refused —
+  // never a reply under a parent that was deleted before it was written.
+  // Returns null when refused; nothing is left behind.
+  async createReply(replyData: {
+    parentId: string;
+    userId: string;
+    text: string;
+    mood: QuackMood | null;
+  }): Promise<Quack | null> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const reply = await tx.quack.create({
+          data: {
+            text: replyData.text,
+            mood: replyData.mood,
+            user: { connect: { id: replyData.userId } },
+          },
+          include: withPoll(replyData.userId),
+        });
+        const written = await tx.$executeRaw`
+          INSERT INTO "quack_reply" ("quackId", "parentId")
+          SELECT ${reply.id}, "parent"."id"
+          FROM "quack" AS "parent"
+          WHERE "parent"."id" = ${replyData.parentId}
+            AND "parent"."deletedAt" IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM "quack_reply" WHERE "quackId" = "parent"."id"
+            )
+          FOR SHARE OF "parent"`;
+        if (written === 0) {
+          throw new ReplyRefused();
+        }
+        return mapPrismaQuackToDomain(reply);
+      });
+    } catch (error) {
+      if (error instanceof ReplyRefused) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   // One row per (poll, user): a first vote inserts, a changed vote updates.

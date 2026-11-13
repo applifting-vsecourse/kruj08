@@ -61,8 +61,36 @@ export type Quack = {
   createdAt: Date;
   updatedAt: Date;
   user?: QuackAuthor;
-  // null is a plain post without a poll — the common case.
+  // null is a plain post without a poll — the common case. Always null for a
+  // reply.
   poll: Poll | null;
+  // Live replies under this quack. Always 0 for a reply: threads are one
+  // level deep.
+  replyCount: number;
+};
+
+// A deleted top-level quack that still has live replies. It stays in the list
+// as a placeholder ("Deleted quack by @name") so its replies, which belong to
+// the people who wrote them, keep something to hang under. It carries no
+// content by construction: no text, mood or poll field to leak.
+export type DeletedQuack = {
+  id: string;
+  deleted: true;
+  userId: string;
+  createdAt: Date;
+  user?: QuackAuthor;
+  replyCount: number;
+};
+
+export const isDeletedQuack = (
+  quack: Quack | DeletedQuack,
+): quack is DeletedQuack => 'deleted' in quack;
+
+// One entry of a list: a live quack or a placeholder, and whether one of its
+// replies is why it is listed (a search hit, or the viewer's own reply under
+// "mine"), so the client opens the thread.
+export type ListedQuack = (Quack | DeletedQuack) & {
+  matchedInReplies: boolean;
 };
 
 // Domain errors. The controller translates them to HTTP status codes so the
@@ -103,6 +131,14 @@ export class DeletionReasonRequiredError extends Error {
   constructor(quackId: string) {
     super(`Deleting quack ${quackId} as an admin needs a reason`);
     this.name = 'DeletionReasonRequiredError';
+  }
+}
+
+// Someone tried to reply to a reply. Threads are one level deep.
+export class CannotReplyToReplyError extends Error {
+  constructor(quackId: string) {
+    super(`Quack ${quackId} is a reply; reply to the quack it answers instead`);
+    this.name = 'CannotReplyToReplyError';
   }
 }
 

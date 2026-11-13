@@ -1,7 +1,9 @@
 import {
   canModerateQuacks,
+  CannotReplyToReplyError,
   DeletionReasonRequiredError,
   InvalidPollError,
+  ListedQuack,
   NotAModeratorError,
   POLL_OPTION_MAX_LENGTH,
   POLL_OPTIONS_MAX,
@@ -56,7 +58,7 @@ export class QuacksService {
   async getQuacks(
     viewer: Identity,
     filter: { search?: string; author?: QuackAuthorFilter } = {},
-  ): Promise<Quack[]> {
+  ): Promise<ListedQuack[]> {
     // An empty or whitespace-only search is "no search", so the repository
     // sees one representation of the unfiltered feed.
     const search = filter.search?.trim();
@@ -86,6 +88,43 @@ export class QuacksService {
         ? normalizePollOptions(quackData.pollOptions)
         : undefined,
     });
+  }
+
+  // The thread under a quack, oldest reply first. A deleted quack whose
+  // replies are still there has a thread too: it is shown as a placeholder.
+  async getReplies(viewer: Identity, quackId: string): Promise<Quack[]> {
+    const replies = await this.quackRepository.getReplies(quackId, viewer.id);
+    if (replies === null) {
+      throw new QuackNotFoundError(quackId);
+    }
+    return replies;
+  }
+
+  // A reply has the text and mood of a quack and nothing else: no poll, and
+  // no replies of its own. The repository checks the parent inside the
+  // write; the read below only picks the error when it refused.
+  async createReply(
+    user: Identity,
+    parentId: string,
+    replyData: { text: string; mood?: QuackMood | null },
+  ): Promise<Quack> {
+    const reply = await this.quackRepository.createReply({
+      parentId,
+      text: replyData.text,
+      mood: replyData.mood ?? null,
+      // the author is taken from the session, never from the request body
+      userId: user.id,
+    });
+    if (reply) {
+      return reply;
+    }
+    const target = await this.quackRepository.findReplyTarget(parentId);
+    if (target?.isReply) {
+      throw new CannotReplyToReplyError(parentId);
+    }
+    // Gone, or deleted: to the person replying both mean the quack is no
+    // longer there to answer.
+    throw new QuackNotFoundError(parentId);
   }
 
   // Soft delete. An admin may delete any quack and must say why; anyone else

@@ -1,4 +1,4 @@
-import { Quack } from '@/modules/quack/domain/quack';
+import { DeletedQuack, Quack } from '@/modules/quack/domain/quack';
 import { QuackResponseDto } from './quack.response.dto';
 
 const aQuackWithPoll = (myOptionId: string | null): Quack => ({
@@ -18,6 +18,7 @@ const aQuackWithPoll = (myOptionId: string | null): Quack => ({
     totalVotes: 3,
     myOptionId,
   },
+  replyCount: 0,
 });
 
 const author = { id: 'author', role: 'user' };
@@ -85,6 +86,58 @@ describe('QuackResponseDto', () => {
   it('keeps the poll id out of the response', () => {
     const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), viewer);
     expect(dto.poll).not.toHaveProperty('id');
+  });
+
+  describe('a deleted quack kept as a placeholder', () => {
+    const placeholder: DeletedQuack = {
+      id: 'q1',
+      deleted: true,
+      userId: 'author',
+      createdAt: new Date('2026-01-01T12:00:00Z'),
+      user: {
+        id: 'author',
+        name: 'Caffeinated Duck',
+        username: 'CaffeinatedDuck',
+      },
+      replyCount: 2,
+    };
+
+    it('carries the author and the count, and no content', () => {
+      const dto = QuackResponseDto.fromDomain(placeholder, viewer);
+      expect(dto).toMatchObject({
+        deleted: true,
+        text: null,
+        mood: null,
+        poll: null,
+        replyCount: 2,
+        user: { username: 'CaffeinatedDuck' },
+      });
+    });
+
+    it('cannot be deleted again, not even by its author or an admin', () => {
+      for (const who of [author, admin]) {
+        const dto = QuackResponseDto.fromDomain(placeholder, who);
+        expect(dto.canDelete).toBe(false);
+        expect(dto.deletionReasonRequired).toBe(false);
+      }
+    });
+  });
+
+  it('marks a live quack as not deleted and passes its reply count on', () => {
+    const dto = QuackResponseDto.fromDomain(
+      { ...aQuackWithPoll(null), replyCount: 3, matchedInReplies: true },
+      viewer,
+    );
+    expect(dto).toMatchObject({
+      deleted: false,
+      replyCount: 3,
+      matchedInReplies: true,
+    });
+  });
+
+  it('reports matchedInReplies false outside a list', () => {
+    const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), viewer);
+    expect(dto.matchedInReplies).toBe(false);
   });
 
   it('maps a plain quack with poll null', () => {
