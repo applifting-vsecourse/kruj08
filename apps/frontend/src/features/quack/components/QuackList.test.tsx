@@ -1,10 +1,22 @@
 // Example component test — the pattern to copy for your own components.
-import { render, screen } from "@testing-library/react"
+import type { ReactElement } from "react"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { render as renderWithoutQueries, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
 import type { Quack } from "@/features/quack/api/quackSchemas"
 import { QuackList } from "@/features/quack/components/QuackList"
+
+// Each quack carries its thread, which reads and writes through TanStack Query.
+const render = (ui: ReactElement) =>
+  renderWithoutQueries(
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      {ui}
+    </QueryClientProvider>,
+  )
 
 const quack = (overrides: Partial<Quack> = {}): Quack => ({
   id: "q1",
@@ -16,6 +28,9 @@ const quack = (overrides: Partial<Quack> = {}): Quack => ({
   poll: null,
   canDelete: false,
   deletionReasonRequired: false,
+  deleted: false,
+  replyCount: 0,
+  matchedInReplies: false,
   ...overrides,
 })
 

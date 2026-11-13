@@ -36,6 +36,9 @@ const quack = (overrides: Partial<Quack> = {}): Quack => ({
   poll: null,
   canDelete: true,
   deletionReasonRequired: false,
+  deleted: false,
+  replyCount: 0,
+  matchedInReplies: false,
   ...overrides,
 })
 

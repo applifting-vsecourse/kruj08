@@ -28,6 +28,10 @@ const SAMPLE_QUACKS: Quack[] = [
     // A preview, not the visitor's own post: no actions menu.
     canDelete: false,
     deletionReasonRequired: false,
+    deleted: false,
+    // The preview shows no thread, so the count is never on screen.
+    replyCount: 0,
+    matchedInReplies: false,
   },
   {
     id: "sample-2",
@@ -39,6 +43,9 @@ const SAMPLE_QUACKS: Quack[] = [
     poll: null,
     canDelete: false,
     deletionReasonRequired: false,
+    deleted: false,
+    replyCount: 0,
+    matchedInReplies: false,
   },
 ]
 
