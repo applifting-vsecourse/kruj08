@@ -15,6 +15,10 @@ type CreateQuackParams = {
   // Optional so the seed has deleted quacks: the row is there, with the
   // record of who deleted it, and the feed and search must not show it.
   deletion?: { at: Date; byUserId: string; reason?: string };
+  // Set for a reply: the quack it answers. The seed writes the satellite row
+  // directly, so it is on the seed to keep threads one level deep and
+  // replies without polls, as QuackRepository.createReply does.
+  parentId?: string;
 };
 
 export type SeededQuack = {
@@ -28,7 +32,8 @@ export async function createQuack(
   prisma: PrismaService,
   params: CreateQuackParams,
 ): Promise<SeededQuack> {
-  const { text, userId, mood, createdAt, pollOptions, deletion } = params;
+  const { text, userId, mood, createdAt, pollOptions, deletion, parentId } =
+    params;
 
   const quack = await prisma.quack.create({
     data: {
@@ -50,6 +55,9 @@ export async function createQuack(
           id: userId,
         },
       },
+      reply: parentId
+        ? { create: { parent: { connect: { id: parentId } } } }
+        : undefined,
       poll: pollOptions
         ? {
             create: {

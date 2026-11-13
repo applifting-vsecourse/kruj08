@@ -29,7 +29,7 @@ export const seedDatabase = async (
   // Drop existing database data from all tables
   try {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "poll_vote", "poll_option", "poll", "quack_deletion", "quack", "session", "account", "verification", "user" RESTART IDENTITY CASCADE;',
+      'TRUNCATE TABLE "poll_vote", "poll_option", "poll", "quack_deletion", "quack_reply", "quack", "session", "account", "verification", "user" RESTART IDENTITY CASCADE;',
     );
   } catch (error) {
     console.error('Error truncating tables:', error);
@@ -103,6 +103,14 @@ export const seedDatabase = async (
     // votes and the record of who deleted it, and must show up nowhere in
     // the app.
     deleted?: { minutesAgo: number; by: User; reason?: string };
+    // Replies under this quack, oldest first. Each may itself be deleted.
+    replies?: {
+      author: User;
+      minutesAgo: number;
+      text: string;
+      mood?: QuackMood;
+      deleted?: { minutesAgo: number; by: User; reason?: string };
+    }[];
   }[] = [
     {
       author: pondAdmin,
@@ -143,6 +151,32 @@ send help or more caffeine`,
       author: deepDuckThoughts,
       minutesAgo: 1495,
       text: `If a pond reflects the sky, is the sky just a very large and very shy pond?`,
+      // A live thread: the feed shows "3 replies" under it. The deleted one
+      // must not count, and searching "crust" must not find it.
+      replies: [
+        {
+          author: breadCritic,
+          minutesAgo: 1460,
+          text: `The sky has never once offered me bread. A pond, occasionally. I know which one I trust.`,
+        },
+        {
+          author: caffeinatedDuck,
+          minutesAgo: 1400,
+          mood: 'silly',
+          text: `ok but what if the pond is just the sky lying down`,
+        },
+        {
+          author: breadCritic,
+          minutesAgo: 1390,
+          deleted: { minutesAgo: 1385, by: breadCritic },
+          text: `On reflection the sky has excellent crust. Retracted.`,
+        },
+        {
+          author: migrationSeason,
+          minutesAgo: 1100,
+          text: `Can confirm from 2 km up: the sky is mostly pond-shaped.`,
+        },
+      ],
     },
     {
       author: migrationSeason,
@@ -190,6 +224,22 @@ DM me for the recipe, only 5 crumbs.`,
         by: superadmin,
         reason: 'Sells duckweed tea as a cure for molting.',
       },
+      // Replies written before the admin stepped in. They belong to their
+      // authors, so the feed keeps a "Deleted quack by @MigrationSeason"
+      // placeholder above them, with no text and no way to reply.
+      replies: [
+        {
+          author: deepDuckThoughts,
+          minutesAgo: 590,
+          mood: 'sad',
+          text: `I molted last spring and no tea could have saved me. Please don't buy this.`,
+        },
+        {
+          author: pondAdmin,
+          minutesAgo: 560,
+          text: `Reported. Nobody is selling anything on this pond.`,
+        },
+      ],
     },
     {
       author: caffeinatedDuck,
@@ -228,6 +278,7 @@ Please stop tagging me.`,
     pollOptions,
     votes,
     deleted,
+    replies,
   } of exampleQuacks) {
     const quack = await createQuack(prisma, {
       text,
@@ -243,6 +294,23 @@ Please stop tagging me.`,
           }
         : undefined,
     });
+
+    for (const reply of replies ?? []) {
+      await createQuack(prisma, {
+        text: reply.text,
+        mood: reply.mood,
+        userId: reply.author.id,
+        parentId: quack.id,
+        createdAt: new Date(now - reply.minutesAgo * MINUTE_IN_MS),
+        deletion: reply.deleted
+          ? {
+              at: new Date(now - reply.deleted.minutesAgo * MINUTE_IN_MS),
+              byUserId: reply.deleted.by.id,
+              reason: reply.deleted.reason,
+            }
+          : undefined,
+      });
+    }
 
     if (quack.poll && votes) {
       for (const [index, voters] of votes.entries()) {
