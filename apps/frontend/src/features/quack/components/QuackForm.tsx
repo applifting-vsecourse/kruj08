@@ -16,10 +16,10 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { QUACK_MOOD_OPTIONS, quackMoodSchema, type QuackMood } from "@/lib/quack-mood"
+import { quackMoodSchema, type QuackMood } from "@/lib/quack-mood"
 import { cn } from "@/lib/utils"
 
+import { MoodToggleGroup } from "@/features/quack/components/MoodToggleGroup"
 import { useAddQuack } from "@/features/quack/hooks/useAddQuack"
 import {
   POLL_OPTION_MAX_LENGTH,
@@ -257,27 +257,12 @@ export function QuackForm({ ref, className, defaultMood = null, onDirtyChange }:
                 <FormItem>
                   <FormLabel>Mood</FormLabel>
                   <FormControl>
-                    {/* Radix reports "" when the active item is clicked again —
-                        that is how the user clears the mood. */}
-                    <ToggleGroup
-                      type="single"
-                      variant="outline"
-                      size="sm"
-                      value={field.value ?? ""}
-                      onValueChange={(value) => field.onChange(value === "" ? undefined : value)}
+                    <MoodToggleGroup
+                      value={field.value}
+                      onValueChange={field.onChange}
                       disabled={addQuack.isPending}
                       aria-label="Mood"
-                    >
-                      {QUACK_MOOD_OPTIONS.map((option) => (
-                        <ToggleGroupItem
-                          key={option.value}
-                          value={option.value}
-                        >
-                          <span aria-hidden="true">{option.emoji}</span>
-                          {option.label}
-                        </ToggleGroupItem>
-                      ))}
-                    </ToggleGroup>
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
