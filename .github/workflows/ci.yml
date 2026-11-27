@@ -71,3 +71,124 @@ jobs:
 
       - name: Build frontend
         run: pnpm frontend build
+
+  # The whole Nest app over real HTTP (supertest) against a real Postgres:
+  # `*.int-spec.ts`. Like `test:db`, it builds its own `quacker_test` database
+  # on this server from the Prisma migrations.
+  test-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: quacker
+          POSTGRES_PASSWORD: quacker
+          POSTGRES_DB: quacker
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U quacker -d quacker"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create env files
+        run: pnpm env:check
+
+      - name: Generate Prisma client
+        run: pnpm backend prisma:generate
+
+      - name: Integration tests
+        run: pnpm backend test:int
+
+  # The Playwright suite in apps/frontend/e2e against the running app: the
+  # database is migrated and seeded here, and Playwright itself starts the
+  # backend and the frontend dev server (`webServer` in playwright.config.ts)
+  # on the ports the env files name, and stops them at the end.
+  test-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: quacker
+          POSTGRES_PASSWORD: quacker
+          POSTGRES_DB: quacker
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U quacker -d quacker"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create env files
+        run: pnpm env:check
+
+      - name: Migrate and seed the database
+        run: |
+          pnpm backend migrate
+          pnpm backend seed
+
+      - name: Install Playwright's Chromium
+        run: pnpm --filter frontend exec playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: pnpm frontend e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/frontend/playwright-report/
+            apps/frontend/test-results/
+          retention-days: 14
+
+  # Red when a pull request deletes or rewrites lines in a test file, so a
+  # reviewer looks at it; adding tests is fine (scripts/check-test-changes.js).
+  # Deliberately on its own: no job needs it, it needs none, and it must stay
+  # out of the required status checks in branch protection, so it never
+  # blocks a merge or the deploy that follows it.
+  test-changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The whole history, so the merge base with the base branch is here.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: Compare test files with the base branch
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+        run: node scripts/check-test-changes.js
