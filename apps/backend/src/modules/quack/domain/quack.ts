@@ -67,6 +67,11 @@ export type Quack = {
   // Live replies under this quack. Always 0 for a reply: threads are one
   // level deep.
   replyCount: number;
+  // How many people like this quack, counted from stored likes, the same
+  // number for every viewer (docs/adr/002-likes.md).
+  likeCount: number;
+  // Whether the viewer is one of them.
+  likedByMe: boolean;
 };
 
 // A deleted top-level quack that still has live replies. It stays in the list

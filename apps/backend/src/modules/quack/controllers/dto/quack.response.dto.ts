@@ -114,6 +114,18 @@ export class QuackResponseDto {
 
   @ApiProperty({
     description:
+      'How many people like this quack; the same for every viewer. Always 0 for a deleted one.',
+  })
+  likeCount!: number;
+
+  @ApiProperty({
+    description:
+      'Whether the signed-in user likes this quack. Always false for a deleted one.',
+  })
+  likedByMe!: boolean;
+
+  @ApiProperty({
+    description:
       'True when a list includes this quack because of one of its replies: a search hit in a reply, or your own reply under `author=me`. The client opens the thread. Always false outside a narrowed list.',
   })
   matchedInReplies!: boolean;
@@ -154,6 +166,9 @@ export class QuackResponseDto {
       },
       replyCount: quack.replyCount,
       matchedInReplies: quack.matchedInReplies ?? false,
+      // TODO(likes): not implemented yet (docs/adr/002-likes.md).
+      likeCount: 0,
+      likedByMe: false,
     };
     if (isDeletedQuack(quack)) {
       return {

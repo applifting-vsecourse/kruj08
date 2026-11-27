@@ -213,6 +213,34 @@ export class QuacksController {
     }
   }
 
+  // TODO(likes): routes only; the service throws until the feature is built
+  // (docs/adr/002-likes.md).
+  @Put(':id/like')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Like a quack (not implemented yet)' })
+  @ApiParam({ name: 'id', description: 'Id of the quack to like' })
+  @ApiResponse({ status: 200, type: QuackResponseDto })
+  async like(
+    @User() user: Identity,
+    @Param('id') id: string,
+  ): Promise<QuackResponseDto> {
+    const quack = await this.quacksService.like(user, id);
+    return QuackResponseDto.fromDomain(quack, user);
+  }
+
+  @Delete(':id/like')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Take your like back (not implemented yet)' })
+  @ApiParam({ name: 'id', description: 'Id of the quack to unlike' })
+  @ApiResponse({ status: 200, type: QuackResponseDto })
+  async unlike(
+    @User() user: Identity,
+    @Param('id') id: string,
+  ): Promise<QuackResponseDto> {
+    const quack = await this.quacksService.unlike(user, id);
+    return QuackResponseDto.fromDomain(quack, user);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({

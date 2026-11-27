@@ -58,6 +58,11 @@ export const quackSchema = z.object({
   // Also the server's call: true for an admin, who has to say why they delete
   // a quack — any quack, their own included.
   deletionReasonRequired: z.boolean(),
+  // Counted by the server from stored likes: the same number for everyone.
+  // The client only displays it (docs/adr/002-likes.md).
+  likeCount: z.number().int().nonnegative(),
+  // Whether the signed-in user is one of the likers.
+  likedByMe: z.boolean(),
 })
 
 // A deleted quack that stays in the list because live replies remain under

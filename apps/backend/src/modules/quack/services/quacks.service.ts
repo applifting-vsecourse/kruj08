@@ -202,4 +202,18 @@ export class QuacksService {
     }
     return updated;
   }
+
+  // TODO(likes): not implemented yet (docs/adr/002-likes.md). The viewer
+  // likes the quack, at most once; answers with the quack as it is now.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async like(user: Identity, quackId: string): Promise<Quack> {
+    throw new Error('Not implemented: QuacksService.like');
+  }
+
+  // TODO(likes): not implemented yet (docs/adr/002-likes.md). The viewer
+  // takes their like back, if they gave one; answers with the quack.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async unlike(user: Identity, quackId: string): Promise<Quack> {
+    throw new Error('Not implemented: QuacksService.unlike');
+  }
 }

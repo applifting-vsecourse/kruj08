@@ -26,6 +26,8 @@ const aQuack = (overrides: Partial<Quack> = {}): Quack => ({
   user: { id: 'u1', name: 'Caffeinated Duck', username: 'CaffeinatedDuck' },
   poll: null,
   replyCount: 0,
+  likeCount: 0,
+  likedByMe: false,
   ...overrides,
 });
 
@@ -464,6 +466,109 @@ describe('QuacksService', () => {
         QuackHasNoPollError,
       );
       expect(repository.upsertVote).not.toHaveBeenCalled();
+    });
+  });
+
+  // Likes (docs/adr/002-likes.md). Liking twice and unliking what was never
+  // liked are not errors: the repository makes both a no-op, so the service
+  // only has to tell a live quack from a gone one and answer with the fresh
+  // counts.
+  describe('like', () => {
+    it("records the viewer's like and returns the quack as the database now has it", async () => {
+      const repository = mock<QuackRepository>();
+      repository.likeQuack.mockResolvedValue(true);
+      const fresh = aQuack({
+        id: 'q2',
+        userId: 'u2',
+        likeCount: 4,
+        likedByMe: true,
+      });
+      repository.findQuackById.mockResolvedValue(fresh);
+
+      const service = new QuacksService(repository);
+
+      await expect(service.like(viewer, 'q2')).resolves.toEqual(fresh);
+      // the liker is the signed-in user, never someone named in the request
+      expect(repository.likeQuack).toHaveBeenCalledWith('q2', 'u1');
+      // re-read for the viewer, so `likedByMe` is theirs
+      expect(repository.findQuackById).toHaveBeenCalledWith('q2', 'u1');
+    });
+
+    it('lets the author like their own quack', async () => {
+      const repository = mock<QuackRepository>();
+      repository.likeQuack.mockResolvedValue(true);
+      const own = aQuack({ userId: 'u1', likeCount: 1, likedByMe: true });
+      repository.findQuackById.mockResolvedValue(own);
+
+      const service = new QuacksService(repository);
+
+      await expect(service.like(viewer, 'q1')).resolves.toEqual(own);
+    });
+
+    it('reports a quack that is gone or deleted as not found', async () => {
+      const repository = mock<QuackRepository>();
+      repository.likeQuack.mockResolvedValue(false);
+
+      const service = new QuacksService(repository);
+
+      await expect(service.like(viewer, 'q1')).rejects.toBeInstanceOf(
+        QuackNotFoundError,
+      );
+    });
+
+    it('reports a quack deleted right after the like as not found', async () => {
+      const repository = mock<QuackRepository>();
+      repository.likeQuack.mockResolvedValue(true);
+      repository.findQuackById.mockResolvedValue(null);
+
+      const service = new QuacksService(repository);
+
+      await expect(service.like(viewer, 'q1')).rejects.toBeInstanceOf(
+        QuackNotFoundError,
+      );
+    });
+  });
+
+  describe('unlike', () => {
+    it("removes the viewer's like and returns the quack as the database now has it", async () => {
+      const repository = mock<QuackRepository>();
+      repository.unlikeQuack.mockResolvedValue(true);
+      const fresh = aQuack({
+        id: 'q2',
+        userId: 'u2',
+        likeCount: 3,
+        likedByMe: false,
+      });
+      repository.findQuackById.mockResolvedValue(fresh);
+
+      const service = new QuacksService(repository);
+
+      await expect(service.unlike(viewer, 'q2')).resolves.toEqual(fresh);
+      expect(repository.unlikeQuack).toHaveBeenCalledWith('q2', 'u1');
+      expect(repository.findQuackById).toHaveBeenCalledWith('q2', 'u1');
+    });
+
+    it('reports a quack that is gone or deleted as not found', async () => {
+      const repository = mock<QuackRepository>();
+      repository.unlikeQuack.mockResolvedValue(false);
+
+      const service = new QuacksService(repository);
+
+      await expect(service.unlike(viewer, 'q1')).rejects.toBeInstanceOf(
+        QuackNotFoundError,
+      );
+    });
+
+    it('reports a quack deleted right after the unlike as not found', async () => {
+      const repository = mock<QuackRepository>();
+      repository.unlikeQuack.mockResolvedValue(true);
+      repository.findQuackById.mockResolvedValue(null);
+
+      const service = new QuacksService(repository);
+
+      await expect(service.unlike(viewer, 'q1')).rejects.toBeInstanceOf(
+        QuackNotFoundError,
+      );
     });
   });
 });
