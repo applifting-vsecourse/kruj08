@@ -150,14 +150,20 @@ test("a reply stays under the quack after its author deletes it", async ({ page 
     await expect(topLevelQuacks(page).filter({ hasText: replyText })).toHaveCount(1)
     await expect(topLevelQuacks(page).filter({ hasText: replyText })).toContainText(text)
 
+    // The seed keeps a deleted quack of this author's for its replies too, so
+    // count against what is there already rather than against an empty feed.
+    // The feed is newest first: this test's placeholder is the first of them.
+    const placeholders = topLevelQuacks(page).filter({
+      hasText: "Deleted quack by @MigrationSeason",
+    })
+    const placeholdersBefore = await placeholders.count()
+    const placeholder = placeholders.first()
+
     // The author deletes the quack; the reply belongs to someone else.
     expect((await author.delete(`quacks/${id}`)).status()).toBe(204)
     await page.reload()
 
-    const placeholder = topLevelQuacks(page).filter({
-      hasText: "Deleted quack by @MigrationSeason",
-    })
-    await expect(placeholder).toHaveCount(1)
+    await expect(placeholders).toHaveCount(placeholdersBefore + 1)
     await expect(placeholder).not.toContainText(text)
     await expect(placeholder.getByRole("button", { name: "Reply", exact: true })).toHaveCount(0)
     await placeholder.getByRole("button", { name: "1 reply" }).click()
@@ -174,7 +180,7 @@ test("a reply stays under the quack after its author deletes it", async ({ page 
     await page.getByRole("menuitem", { name: "Delete" }).click()
     await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click()
     await expect(page.getByText("Reply deleted")).toBeVisible()
-    await expect(placeholder).toHaveCount(0)
+    await expect(placeholders).toHaveCount(placeholdersBefore)
   } finally {
     await author.dispose()
   }
