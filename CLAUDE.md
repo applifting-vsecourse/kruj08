@@ -15,6 +15,9 @@ The worked example is the quack feed: `Quack` model → seed → repository → 
 - `pnpm check-all` — lint + type-check + tests + build (same as CI)
 - `pnpm backend test` / `pnpm frontend test:ci` — unit tests
 - `pnpm backend test:db` — `*.db-spec.ts` tests against a real Postgres, for what a mocked Prisma can't show (raw SQL, constraints). Needs the dev database container up; each run drops and rebuilds a `quacker_test` database next to it, never the dev one
+- `pnpm backend test:int` — `*.int-spec.ts` tests: the whole Nest app (BetterAuth included) over real HTTP with supertest, signed in or not, against the same rebuilt `quacker_test` database. Helpers in `apps/backend/test/int/` (`createTestApp`, `resetDatabase`, `anonymous`, `signedUp`); e-mails go to a recording fake. Don't run it at the same time as `test:db` — both rebuild that database
+- `pnpm frontend e2e` — Playwright against the running app; in CI (`CI=true`) it starts the backend and frontend itself
+- `pnpm test:changes [base]` — lists test files whose existing lines a branch deletes or rewrites (default base `origin/main`); CI's non-required `test-changes` job
 - `pnpm backend prisma:migrations:run` — create/apply migrations after schema changes
 
 ## Conventions
