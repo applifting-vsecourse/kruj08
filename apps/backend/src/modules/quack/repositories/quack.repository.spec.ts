@@ -146,6 +146,10 @@ const WRITES: (keyof QuackRepository)[] = [
   'upsertVote',
   'softDeleteOwnQuack',
   'softDeleteQuackAsModerator',
+  // Likes write only, but must refuse a deleted quack in the same statement
+  // (docs/adr/002-likes.md); the integration tests prove that over HTTP.
+  'likeQuack',
+  'unlikeQuack',
 ];
 
 describe('QuackRepository', () => {

@@ -94,6 +94,10 @@ const mapPrismaQuackToDomain = (quack: PrismaQuackWithPoll): Quack => ({
   user: quack.user ? mapPrismaUserToAuthor(quack.user) : undefined,
   poll: quack.poll ? mapPrismaPollToDomain(quack.poll) : null,
   replyCount: quack._count?.replies ?? 0,
+  // TODO(likes): not implemented yet — count the likes and the viewer's own
+  // (docs/adr/002-likes.md).
+  likeCount: 0,
+  likedByMe: false,
 });
 
 // A row a list read may return deleted (see `listedInThreads`) becomes a
@@ -413,6 +417,22 @@ export class QuackRepository {
       }
       throw error;
     }
+  }
+
+  // TODO(likes): not implemented yet (docs/adr/002-likes.md). Records that
+  // `userId` likes the quack; liking it again changes nothing. Returns false
+  // when there is no live quack with this id.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async likeQuack(quackId: string, userId: string): Promise<boolean> {
+    throw new Error('Not implemented: QuackRepository.likeQuack');
+  }
+
+  // TODO(likes): not implemented yet (docs/adr/002-likes.md). Removes the
+  // like of `userId`, if there is one. Returns false when there is no live
+  // quack with this id.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async unlikeQuack(quackId: string, userId: string): Promise<boolean> {
+    throw new Error('Not implemented: QuackRepository.unlikeQuack');
   }
 
   // One row per (poll, user): a first vote inserts, a changed vote updates.

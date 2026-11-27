@@ -19,6 +19,8 @@ const aQuackWithPoll = (myOptionId: string | null): Quack => ({
     myOptionId,
   },
   replyCount: 0,
+  likeCount: 0,
+  likedByMe: false,
 });
 
 const author = { id: 'author', role: 'user' };
@@ -146,5 +148,38 @@ describe('QuackResponseDto', () => {
       viewer,
     );
     expect(dto.poll).toBeNull();
+  });
+
+  // docs/adr/002-likes.md: the server counts, the client only displays.
+  describe('likes', () => {
+    it('passes on the like count and whether the viewer is one of the likers', () => {
+      const dto = QuackResponseDto.fromDomain(
+        { ...aQuackWithPoll(null), likeCount: 3, likedByMe: true },
+        viewer,
+      );
+      expect(dto).toMatchObject({ likeCount: 3, likedByMe: true });
+    });
+
+    it('reports a quack nobody liked as 0, not liked', () => {
+      const dto = QuackResponseDto.fromDomain(aQuackWithPoll(null), viewer);
+      expect(dto).toMatchObject({ likeCount: 0, likedByMe: false });
+    });
+
+    it("shows no likes on a deleted quack's placeholder", () => {
+      const placeholder: DeletedQuack = {
+        id: 'q1',
+        deleted: true,
+        userId: 'author',
+        createdAt: new Date('2026-01-01T12:00:00Z'),
+        user: {
+          id: 'author',
+          name: 'Caffeinated Duck',
+          username: 'CaffeinatedDuck',
+        },
+        replyCount: 1,
+      };
+      const dto = QuackResponseDto.fromDomain(placeholder, viewer);
+      expect(dto).toMatchObject({ likeCount: 0, likedByMe: false });
+    });
   });
 });
