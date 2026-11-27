@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from "react"
+import { useCallback, useId, useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { ChevronDown, ChevronUp, Loader2, MessageCircle, RefreshCw } from "lucide-react"
 
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import type { ListedQuack } from "@/features/quack/api/quackSchemas"
 import { repliesQueryOptions } from "@/features/quack/api/repliesQueryOptions"
 import { QuackItem } from "@/features/quack/components/QuackItem"
+import { QuackLikeButton } from "@/features/quack/components/QuackLikeButton"
 import { ReplyForm } from "@/features/quack/components/ReplyForm"
 
 export const formatReplyCount = (count: number) => (count === 1 ? "1 reply" : `${count} replies`)
@@ -28,6 +29,8 @@ type QuackThreadProps = {
   onReplyDirtyChange?: (quackId: string, isDirty: boolean) => void
   // Passed on to the replies' delete dialogs (see QuackActions).
   onDeletionDirtyChange?: (isDirty: boolean) => void
+  // The quack's own controls (its like), first in the row with the thread's.
+  actions?: ReactNode
 }
 
 // The replies under a quack: collapsed to a count until opened, then the
@@ -37,6 +40,7 @@ export function QuackThread({
   quack,
   onReplyDirtyChange,
   onDeletionDirtyChange,
+  actions,
 }: QuackThreadProps) {
   const [isOpen, setIsOpen] = useState(quack.matchedInReplies)
   const [hasDraft, setHasDraft] = useState(false)
@@ -94,6 +98,7 @@ export function QuackThread({
   return (
     <div className="mt-2 flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
+        {actions}
         {quack.replyCount > 0 || isOpen ? (
           <Button
             variant="ghost"
@@ -156,7 +161,12 @@ export function QuackThread({
                 quack={reply}
                 variant="reply"
                 onDeletionDirtyChange={onDeletionDirtyChange}
-              />
+              >
+                {/* A reply is a quack, so it is liked the same way. */}
+                <div className="mt-1 flex items-center">
+                  <QuackLikeButton quack={reply} />
+                </div>
+              </QuackItem>
             ))
           )}
 
