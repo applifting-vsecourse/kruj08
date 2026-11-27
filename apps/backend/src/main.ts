@@ -1,10 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { toNodeHandler } from 'better-auth/node';
-import * as cookieParser from 'cookie-parser';
-import * as express from 'express';
 import { AppModule } from './app.module';
-import { BetterAuth } from './shared/auth/providers/better-auth.provider';
+import { configureApp } from './app.setup';
 import { Config } from './shared/config/config.service';
 
 /**
@@ -18,23 +15,8 @@ async function main(): Promise<void> {
   // Get configuration service
   const config = app.get(Config);
 
-  // Configure CORS - Allows cross-origin requests from specific origins
-  app.enableCors({
-    origin: [config.backendUrl, config.frontendUrl],
-    credentials: true,
-  });
-
-  // Setup cookie parser middleware
-  app.use(cookieParser());
-
-  const appInstance = app.getHttpAdapter().getInstance();
-  const betterAuth = app.get<BetterAuth>('BetterAuth');
-  // Express 5 (via NestJS 11) requires named wildcards — a bare `*` throws.
-  appInstance.all('/api/auth/*splat', toNodeHandler(betterAuth));
-  appInstance.use(express.json());
-
-  // Configure API prefix for all routes
-  app.setGlobalPrefix('api');
+  // CORS, cookies, BetterAuth, body parsing and the /api prefix
+  configureApp(app);
 
   // Setup Swagger API documentation at /api/docs
   const swaggerConfig = new DocumentBuilder()
