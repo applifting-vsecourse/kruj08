@@ -1,7 +1,7 @@
-// The database the *.db-spec.ts tests run against: on the same server, with
-// the same credentials as the dev database, under its name plus "_test". A
-// run drops and rebuilds it, so it must never be the database `pnpm dev`
-// works with.
+// The database the *.db-spec.ts and *.int-spec.ts tests run against: on the
+// same server, with the same credentials as the dev database, under its name
+// plus "_test". A run drops and rebuilds it, so it must never be the database
+// `pnpm dev` works with — and the two suites must not run at the same time.
 
 export const devDatabaseUrl = (): string => {
   const url = process.env.DATABASE_URL;
