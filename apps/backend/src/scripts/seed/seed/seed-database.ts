@@ -8,6 +8,18 @@ import { createUser } from './create-user';
 
 const MINUTE_IN_MS = 60 * 1000;
 
+// Writes the rows directly, deleted quack or not: a like given before the
+// quack was deleted stays stored, and the app must still show none.
+const likeAsSeeded = async (
+  prisma: PrismaService,
+  quackId: string,
+  likers: User[] = [],
+): Promise<void> => {
+  await prisma.quackLike.createMany({
+    data: likers.map((liker) => ({ quackId, userId: liker.id })),
+  });
+};
+
 export const seedDatabase = async (
   prisma: PrismaService,
   config: Config,
@@ -29,7 +41,7 @@ export const seedDatabase = async (
   // Drop existing database data from all tables
   try {
     await prisma.$executeRawUnsafe(
-      'TRUNCATE TABLE "poll_vote", "poll_option", "poll", "quack_deletion", "quack_reply", "quack", "session", "account", "verification", "user" RESTART IDENTITY CASCADE;',
+      'TRUNCATE TABLE "quack_like", "poll_vote", "poll_option", "poll", "quack_deletion", "quack_reply", "quack", "session", "account", "verification", "user" RESTART IDENTITY CASCADE;',
     );
   } catch (error) {
     console.error('Error truncating tables:', error);
@@ -98,6 +110,9 @@ export const seedDatabase = async (
     pollOptions?: string[];
     // Usernames of seeded users voting, in option order (index = option).
     votes?: User[][];
+    // Seeded users who like this quack, so the feed shows counts other than
+    // 0 and, signed in as one of them, the "liked" state.
+    likes?: User[];
     // Set for a quack that has since been deleted, by its author or by an
     // admin (who gives a reason). It stays in the database with its poll,
     // votes and the record of who deleted it, and must show up nowhere in
@@ -109,6 +124,7 @@ export const seedDatabase = async (
       minutesAgo: number;
       text: string;
       mood?: QuackMood;
+      likes?: User[];
       deleted?: { minutesAgo: number; by: User; reason?: string };
     }[];
   }[] = [
@@ -129,6 +145,7 @@ The V formation works beautifully right up until whoever is at the front decides
       minutesAgo: 2255,
       text: `Sourdough. Thrown by a child. Landed two metres short of anyone.
 Crust: excellent. Delivery: amateur. 6/10.`,
+      likes: [caffeinatedDuck, migrationSeason],
     },
     {
       author: caffeinatedDuck,
@@ -151,6 +168,7 @@ send help or more caffeine`,
       author: deepDuckThoughts,
       minutesAgo: 1495,
       text: `If a pond reflects the sky, is the sky just a very large and very shy pond?`,
+      likes: [caffeinatedDuck, breadCritic, migrationSeason, pondAdmin],
       // A live thread: the feed shows "3 replies" under it. The deleted one
       // must not count, and searching "crust" must not find it.
       replies: [
@@ -164,6 +182,8 @@ send help or more caffeine`,
           minutesAgo: 1400,
           mood: 'silly',
           text: `ok but what if the pond is just the sky lying down`,
+          // A liked reply, by the thread's author among others.
+          likes: [deepDuckThoughts, migrationSeason],
         },
         {
           author: breadCritic,
@@ -197,6 +217,8 @@ We have footage. It is extremely blurry footage. But we have it.`,
       mood: 'silly',
       text: `third espresso and i can hear colours now
 one of them is quacking`,
+      // Liked by its own author too, which is allowed.
+      likes: [caffeinatedDuck, deepDuckThoughts, breadCritic],
     },
     {
       author: breadCritic,
@@ -219,6 +241,8 @@ Some of us would quite like to feel things.`,
       minutesAgo: 600,
       text: `Duckweed tea cures molting in three days!!! Big Pond doesn't want you to know.
 DM me for the recipe, only 5 crumbs.`,
+      // Liked before it was removed: the placeholder must show no likes.
+      likes: [caffeinatedDuck],
       deleted: {
         minutesAgo: 540,
         by: superadmin,
@@ -277,6 +301,7 @@ Please stop tagging me.`,
     mood,
     pollOptions,
     votes,
+    likes,
     deleted,
     replies,
   } of exampleQuacks) {
@@ -295,8 +320,10 @@ Please stop tagging me.`,
         : undefined,
     });
 
+    await likeAsSeeded(prisma, quack.id, likes);
+
     for (const reply of replies ?? []) {
-      await createQuack(prisma, {
+      const seededReply = await createQuack(prisma, {
         text: reply.text,
         mood: reply.mood,
         userId: reply.author.id,
@@ -310,6 +337,7 @@ Please stop tagging me.`,
             }
           : undefined,
       });
+      await likeAsSeeded(prisma, seededReply.id, reply.likes);
     }
 
     if (quack.poll && votes) {
