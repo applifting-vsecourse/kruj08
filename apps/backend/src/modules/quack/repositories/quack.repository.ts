@@ -19,10 +19,12 @@ import {
 import { Injectable } from '@nestjs/common';
 
 // Everything the feed and the vote response need in one shape: the author,
-// the poll with per-option vote counts, and the viewer's own vote (at most one
-// row thanks to the (pollId, userId) primary key). Spelled out as a type so
-// Prisma infers the exact result shape rather than a widened `QuackInclude`.
-type QuackIncludeWithPoll = {
+// the poll with per-option vote counts, the viewer's own vote (at most one
+// row thanks to the (pollId, userId) primary key), how many people like the
+// quack and whether the viewer is one of them (at most one row thanks to the
+// (quackId, userId) primary key; docs/adr/002-likes.md). Spelled out as a type
+// so Prisma infers the exact result shape rather than a widened `QuackInclude`.
+type QuackIncludeForViewer = {
   user: true;
   poll: {
     include: {
@@ -33,9 +35,11 @@ type QuackIncludeWithPoll = {
       votes: { where: { userId: string }; select: { optionId: true } };
     };
   };
+  likes: { where: { userId: string }; select: { userId: true } };
+  _count: { select: { likes: true } };
 };
 
-const withPoll = (viewerId: string): QuackIncludeWithPoll => ({
+const forViewer = (viewerId: string): QuackIncludeForViewer => ({
   user: true,
   poll: {
     include: {
@@ -46,22 +50,27 @@ const withPoll = (viewerId: string): QuackIncludeWithPoll => ({
       votes: { where: { userId: viewerId }, select: { optionId: true } },
     },
   },
+  likes: { where: { userId: viewerId }, select: { userId: true } },
+  _count: { select: { likes: true } },
 });
 
-type PrismaQuackWithPoll = PrismaQuack & {
+type PrismaQuackForViewer = PrismaQuack & {
   user?: PrismaUser;
-  // Live replies, when the read asked for the count (lists only).
-  _count?: { replies: number };
+  // Likes on every read through `forViewer`; live replies only when the read
+  // asked for them (lists only).
+  _count?: { likes?: number; replies?: number };
   poll?:
     | (PrismaPoll & {
         options: (PrismaPollOption & { _count: { votes: number } })[];
         votes: { optionId: string }[];
       })
     | null;
+  // The viewer's own like, if there is one.
+  likes?: { userId: string }[];
 };
 
 const mapPrismaPollToDomain = (
-  poll: NonNullable<PrismaQuackWithPoll['poll']>,
+  poll: NonNullable<PrismaQuackForViewer['poll']>,
 ): Poll => {
   const options = poll.options.map((option) => ({
     id: option.id,
@@ -84,7 +93,7 @@ const mapPrismaUserToAuthor = (user: PrismaUser): QuackAuthor => ({
   username: user.displayUsername ?? user.username ?? '',
 });
 
-const mapPrismaQuackToDomain = (quack: PrismaQuackWithPoll): Quack => ({
+const mapPrismaQuackToDomain = (quack: PrismaQuackForViewer): Quack => ({
   id: quack.id,
   text: quack.text,
   mood: quack.mood,
@@ -94,17 +103,15 @@ const mapPrismaQuackToDomain = (quack: PrismaQuackWithPoll): Quack => ({
   user: quack.user ? mapPrismaUserToAuthor(quack.user) : undefined,
   poll: quack.poll ? mapPrismaPollToDomain(quack.poll) : null,
   replyCount: quack._count?.replies ?? 0,
-  // TODO(likes): not implemented yet — count the likes and the viewer's own
-  // (docs/adr/002-likes.md).
-  likeCount: 0,
-  likedByMe: false,
+  likeCount: quack._count?.likes ?? 0,
+  likedByMe: (quack.likes?.length ?? 0) > 0,
 });
 
 // A row a list read may return deleted (see `listedInThreads`) becomes a
-// placeholder here, built field by field so the text, mood and poll the row
-// still holds never leave this file.
+// placeholder here, built field by field so the text, mood, poll and likes
+// the row still holds never leave this file.
 const mapPrismaListedQuackToDomain = (
-  quack: PrismaQuackWithPoll,
+  quack: PrismaQuackForViewer,
 ): Quack | DeletedQuack =>
   quack.deletedAt
     ? {
@@ -206,6 +213,14 @@ const softDelete = (
     return true;
   });
 
+// Whether there is a live quack with this id. Only for telling apart why a
+// like or unlike wrote nothing.
+const isLive = async (prisma: PrismaService, id: string): Promise<boolean> =>
+  (await prisma.quack.findUnique({
+    where: notDeleted({ id }),
+    select: { id: true },
+  })) !== null;
+
 /**
  * If you decide to choose a different ORM or database, you should only need to change the repository files methods implementation.
  * Inject what you need instead of PrismaService and re-implement the methods and model mapping.
@@ -224,8 +239,10 @@ export class QuackRepository {
     const quacks = await this.prisma.quack.findMany({
       where: listedInThreads(matches),
       include: {
-        ...withPoll(viewerId),
-        _count: { select: { replies: { where: liveReply() } } },
+        ...forViewer(viewerId),
+        _count: {
+          select: { likes: true, replies: { where: liveReply() } },
+        },
         // At most one matching live reply: only whether there is one matters.
         replies: {
           where: liveReply(matches),
@@ -258,7 +275,7 @@ export class QuackRepository {
     }
     const replies = await this.prisma.quack.findMany({
       where: notDeleted({ reply: { is: { parentId } } }),
-      include: withPoll(viewerId),
+      include: forViewer(viewerId),
       // The id breaks ties between replies posted in the same millisecond.
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
@@ -278,7 +295,7 @@ export class QuackRepository {
   async findQuackById(id: string, viewerId: string): Promise<Quack | null> {
     const quack = await this.prisma.quack.findUnique({
       where: notDeleted({ id }),
-      include: withPoll(viewerId),
+      include: forViewer(viewerId),
     });
     return quack ? mapPrismaQuackToDomain(quack) : null;
   }
@@ -367,7 +384,7 @@ export class QuackRepository {
             }
           : undefined,
       },
-      include: withPoll(createQuackData.userId),
+      include: forViewer(createQuackData.userId),
     });
     return mapPrismaQuackToDomain(quack);
   }
@@ -394,7 +411,7 @@ export class QuackRepository {
             mood: replyData.mood,
             user: { connect: { id: replyData.userId } },
           },
-          include: withPoll(replyData.userId),
+          include: forViewer(replyData.userId),
         });
         const written = await tx.$executeRaw`
           INSERT INTO "quack_reply" ("quackId", "parentId")
@@ -419,20 +436,40 @@ export class QuackRepository {
     }
   }
 
-  // TODO(likes): not implemented yet (docs/adr/002-likes.md). Records that
-  // `userId` likes the quack; liking it again changes nothing. Returns false
-  // when there is no live quack with this id.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // Records that `userId` likes the quack (docs/adr/002-likes.md). The
+  // INSERT … SELECT alone decides whether the like may be written: only while
+  // the quack is alive, and the (quackId, userId) primary key turns a second
+  // like, however concurrent, into a no-op. The share lock on the quack works
+  // as in createReply: a deletion running at the same time comes either
+  // after the like or before it, and then the like is refused. Returns
+  // whether there is a live quack with this id; liking it again is no error.
   async likeQuack(quackId: string, userId: string): Promise<boolean> {
-    throw new Error('Not implemented: QuackRepository.likeQuack');
+    const written = await this.prisma.$executeRaw`
+      INSERT INTO "quack_like" ("quackId", "userId")
+      SELECT "quack"."id", ${userId}
+      FROM "quack"
+      WHERE "quack"."id" = ${quackId}
+        AND "quack"."deletedAt" IS NULL
+      FOR SHARE OF "quack"
+      ON CONFLICT DO NOTHING`;
+    // Nothing written: liked already, or no live quack. The read only tells
+    // which.
+    return written > 0 || (await isLive(this.prisma, quackId));
   }
 
-  // TODO(likes): not implemented yet (docs/adr/002-likes.md). Removes the
-  // like of `userId`, if there is one. Returns false when there is no live
-  // quack with this id.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // Removes the like of `userId`, if there is one, while the quack is alive.
+  // Taking back a like that is not there is no error. Returns whether there
+  // is a live quack with this id.
   async unlikeQuack(quackId: string, userId: string): Promise<boolean> {
-    throw new Error('Not implemented: QuackRepository.unlikeQuack');
+    const removed = await this.prisma.$executeRaw`
+      DELETE FROM "quack_like"
+      WHERE "quackId" = ${quackId}
+        AND "userId" = ${userId}
+        AND EXISTS (
+          SELECT 1 FROM "quack"
+          WHERE "id" = ${quackId} AND "deletedAt" IS NULL
+        )`;
+    return removed > 0 || (await isLive(this.prisma, quackId));
   }
 
   // One row per (poll, user): a first vote inserts, a changed vote updates.

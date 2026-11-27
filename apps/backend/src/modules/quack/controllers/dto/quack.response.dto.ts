@@ -166,9 +166,6 @@ export class QuackResponseDto {
       },
       replyCount: quack.replyCount,
       matchedInReplies: quack.matchedInReplies ?? false,
-      // TODO(likes): not implemented yet (docs/adr/002-likes.md).
-      likeCount: 0,
-      likedByMe: false,
     };
     if (isDeletedQuack(quack)) {
       return {
@@ -177,6 +174,9 @@ export class QuackResponseDto {
         text: null,
         mood: null,
         poll: null,
+        // A placeholder shows no likes, not even the ones it had.
+        likeCount: 0,
+        likedByMe: false,
         canDelete: false,
         deletionReasonRequired: false,
       };
@@ -189,6 +189,8 @@ export class QuackResponseDto {
       text: quack.text,
       mood: quack.mood,
       poll: quack.poll ? PollDto.fromDomain(quack.poll, { isAuthor }) : null,
+      likeCount: quack.likeCount,
+      likedByMe: quack.likedByMe,
       canDelete: isAuthor || isModerator,
       deletionReasonRequired: isModerator,
     };

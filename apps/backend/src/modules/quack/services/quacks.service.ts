@@ -203,17 +203,34 @@ export class QuacksService {
     return updated;
   }
 
-  // TODO(likes): not implemented yet (docs/adr/002-likes.md). The viewer
-  // likes the quack, at most once; answers with the quack as it is now.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // The viewer likes the quack, at most once: liking it again is not an
+  // error, the repository makes it a no-op (docs/adr/002-likes.md). Anyone
+  // may like any live quack, their own and replies included.
   async like(user: Identity, quackId: string): Promise<Quack> {
-    throw new Error('Not implemented: QuacksService.like');
+    // the liker is taken from the session, never from the request
+    if (!(await this.quackRepository.likeQuack(quackId, user.id))) {
+      throw new QuackNotFoundError(quackId);
+    }
+    return this.reread(user, quackId);
   }
 
-  // TODO(likes): not implemented yet (docs/adr/002-likes.md). The viewer
-  // takes their like back, if they gave one; answers with the quack.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // The viewer takes their like back, if they gave one; taking back a like
+  // that is not there is not an error either.
   async unlike(user: Identity, quackId: string): Promise<Quack> {
-    throw new Error('Not implemented: QuacksService.unlike');
+    if (!(await this.quackRepository.unlikeQuack(quackId, user.id))) {
+      throw new QuackNotFoundError(quackId);
+    }
+    return this.reread(user, quackId);
+  }
+
+  // The quack as the database has it now, for the viewer, so the count is
+  // the one every other viewer gets and `likedByMe` is theirs.
+  private async reread(user: Identity, quackId: string): Promise<Quack> {
+    const quack = await this.quackRepository.findQuackById(quackId, user.id);
+    if (!quack) {
+      // Deleted right after the write; treat it as gone.
+      throw new QuackNotFoundError(quackId);
+    }
+    return quack;
   }
 }
