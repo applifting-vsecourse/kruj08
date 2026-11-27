@@ -52,6 +52,9 @@ model Quack {
   reply     QuackReply?  @relation("ReplyQuack")
   // The replies to this quack, when it is a top-level one.
   replies   QuackReply[] @relation("ReplyParent")
+  // Who likes this quack, one row per person. The count is never stored:
+  // every read counts these rows (docs/adr/002-likes.md).
+  likes     QuackLike[]
 
   @@index([userId])
   // The feed: quacks that are not deleted, newest first.
@@ -104,6 +107,24 @@ model QuackReply {
 
   @@index([parentId])
   @@map("quack_reply")
+}
+
+// One person liking one quack (docs/adr/002-likes.md). "At most once" is the
+// primary key, so no concurrent request can store a second like. A soft
+// delete of the quack leaves its likes here, unseen; only a hard delete (today
+// the cascade from a deleted account) removes them. QuackRepository.likeQuack
+// and unlikeQuack refuse a deleted quack in the same statement that writes.
+model QuackLike {
+  quack     Quack    @relation(fields: [quackId], references: [id], onDelete: Cascade)
+  quackId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@id([quackId, userId])
+  // The cascade from a deleted account, and later "quacks I liked".
+  @@index([userId])
+  @@map("quack_like")
 }
 
 // Satellite of a quack: the quack's text is the question, so the poll itself
@@ -213,6 +234,7 @@ model User {
   accounts      Account[]
   quacks         Quack[]
   pollVotes      PollVote[]
+  quackLikes     QuackLike[]
   quackDeletions QuackDeletion[]
   role          UserRole  @default(user)
 
