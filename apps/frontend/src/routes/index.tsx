@@ -114,6 +114,9 @@ function LandingPage() {
             A peek at the feed
           </h2>
           <div className="rounded-xl border border-border bg-card px-5 py-2">
+            {/* No thread and no like under the samples: a visitor who is not
+                signed in can't like, so the preview offers no button that
+                would only fail. */}
             {SAMPLE_QUACKS.map((quack) => (
               <QuackItem
                 key={quack.id}

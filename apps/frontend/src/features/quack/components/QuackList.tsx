@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 
 import type { ListedQuack, QuackAuthorFilter } from "@/features/quack/api/quackSchemas"
 import { QuackItem } from "@/features/quack/components/QuackItem"
+import { QuackLikeButton } from "@/features/quack/components/QuackLikeButton"
 import { QuackThread } from "@/features/quack/components/QuackThread"
 
 type QuackListProps = {
@@ -106,6 +107,8 @@ export function QuackList({
             quack={quack}
             onReplyDirtyChange={onReplyDirtyChange}
             onDeletionDirtyChange={onDeletionDirtyChange}
+            // A deleted quack's placeholder shows no likes and takes none.
+            actions={quack.deleted ? null : <QuackLikeButton quack={quack} />}
           />
         </QuackItem>
       ))}
