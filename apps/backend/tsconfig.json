@@ -15,8 +15,11 @@
     // `@/` points at src, same as the frontend. `baseUrl` used to resolve these
     // implicitly, but it resolves every bare specifier against a directory —
     // which neither Node nor bundlers do — and is deprecated.
+    // `@test/` points at test/, the helpers the database and integration
+    // tests share; never imported from code that ships.
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@test/*": ["./test/*"]
     },
     "strict": true,
     "incremental": true,

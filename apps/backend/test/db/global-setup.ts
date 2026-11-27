@@ -5,9 +5,10 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../src/generated/prisma/client';
 import { databaseName, devDatabaseUrl, testDatabaseUrl } from './test-database';
 
-// Runs once before `pnpm backend test:db`: drops the test database, creates
-// it again and applies every migration, so the tests see exactly the schema
-// the migrations produce and nothing a previous run left behind.
+// Runs once before `pnpm backend test:db` and `pnpm backend test:int`: drops
+// the test database, creates it again and applies every migration, so the
+// tests see exactly the schema the migrations produce and nothing a previous
+// run left behind.
 export default async function globalSetup(): Promise<void> {
   const devUrl = devDatabaseUrl();
   const testUrl = testDatabaseUrl(devUrl);
